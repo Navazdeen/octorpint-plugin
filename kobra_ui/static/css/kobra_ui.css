@@ -213,7 +213,16 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui #kui-v-2d { overflow: hidden; }
 /* the 2D renderer paints a fixed white bed; invert + hue-rotate turns it dark and keeps line hues */
 #kui #kui-v-2d #gcode_canvas { filter: invert(.94) hue-rotate(180deg); border-radius: 2px; }
-#kui #kui-v-2d #canvas_container { position: absolute; left: 50%; top: 50%; transform-origin: center; transform: translate(-50%, -50%) scale(var(--s2d, 1)); margin: 0; }
+#kui #kui-v-2d #canvas_container { position: absolute; left: 50%; top: 50%; width: 600px; transform-origin: center; transform: translate(-50%, -50%) scale(var(--s2d, 1)); margin: 0; outline: 0; }
+/* OctoPrint scopes these to its #gcode tab; re-created here because the viewer moved */
+#kui #kui-v-2d #gcode_layer_slider, #kui #kui-v-2d #canvas_container > .slider-vertical { position: absolute; right: 0; top: 0; height: 568px; float: right; margin: 0; }
+#kui #kui-v-2d #gcode_layer_slider .slider-handle, #kui #kui-v-2d .slider-vertical .slider-handle { width: 14px; height: 14px; margin-left: -3px; margin-top: -7px; }
+#kui #kui-v-2d #gcode_command_slider .slider-handle, #kui #kui-v-2d .slider-horizontal .slider-handle { width: 14px; height: 14px; margin-left: -7px; margin-top: -3px; }
+#kui #kui-v-2d .slider-horizontal { width: 568px !important; margin-top: 10px; }
+#kui #kui-v-2d .slider .slider-track { background: #2a2930; background-image: none; box-shadow: none; border-radius: 4px; }
+#kui #kui-v-2d .slider .slider-selection { background: var(--accent); background-image: none; box-shadow: none; }
+#kui #kui-v-2d .slider .slider-handle { background: #fff; background-image: none; box-shadow: 0 0 0 3px rgba(0,0,0,.35); border: 0; opacity: 1; }
+#kui #kui-v-2d .tooltip-inner { background: var(--raised); color: #fff; font: 12px var(--mono); }
 #kui .pane .hud { position: absolute; left: 14px; top: 12px; font-size: 12px; color: var(--muted); z-index: 4; pointer-events: none; }
 #kui .pane .hud .num { color: var(--text); }
 #kui .track { margin-top: 16px; }
