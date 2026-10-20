@@ -1,0 +1,452 @@
+/* Kobra UI - built 1:1 from the approved mockups (console-v3.html, views-v2.html).
+   taste-skill app style "data-terminal" (seed 1900990100); accent = the filament orange.
+   Everything is scoped under #kui; class names that clash with OctoPrint's Bootstrap 2
+   (.btn .row .bar .span2 .lead .modal) are renamed with a k prefix. */
+
+@font-face { font-family: "Public Sans"; font-weight: 400; font-display: swap; src: url(../fonts/public-sans-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Public Sans"; font-weight: 500; font-display: swap; src: url(../fonts/public-sans-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Public Sans"; font-weight: 600; font-display: swap; src: url(../fonts/public-sans-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: swap; src: url(../fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: swap; src: url(../fonts/jetbrains-mono-latin-500-normal.woff2) format("woff2"); }
+
+:root {
+  --ground: #171719; --surface: #131217; --raised: #212023; --border: #222224; --rule: #1b1a1f; --control: #3a3a3e;
+  --text: #ffffff; --muted: #8a8c92; --accent: #e8792f; --accent-ink: #f0955a;
+  --positive: #44a282; --negative: #e5566f; --warning: #d9a441;
+  --pill-positive-bg: #1b2828; --pill-positive-ink: #5fc39c; --pill-negative-bg: #2c1a20; --pill-negative-ink: #e5566f;
+  --pill-warning-bg: #2a2416; --pill-warning-ink: #d9a441;
+  --shadow: 0 12px 28px rgba(0,0,0,.2);
+  --radius-card: 6px; --radius-control: 999px;
+  --gap: 24px; --pad: 32px; --control-height: 34px; --card: 300px;
+  --fs-title: 26px; --fs-section: 16px; --fs-body: 13px; --fs-small: 12px;
+  --font: "Public Sans", Inter, system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  --dock: 58px;
+}
+
+/* ---------- take over the page ---------- */
+html.kui-on { color-scheme: dark; overscroll-behavior: none; background: var(--ground); }
+html.kui-on body { background: var(--ground); padding: 0 !important; overflow: hidden; }
+html.kui-on body > #navbar, html.kui-on body > .container.octoprint-container, html.kui-on body > .container,
+html.kui-on body > .footer { visibility: hidden; height: 0; overflow: hidden; margin: 0; padding: 0; }
+#kui { display: none; }
+html.kui-on #kui { display: block; position: fixed; inset: 0; z-index: 1000; }
+/* scrollbars */
+html.kui-on, html.kui-on #kui *, html.kui-on .modal, html.kui-on .modal * { scrollbar-color: #3a3a3e transparent; scrollbar-width: thin; }
+html.kui-on ::-webkit-scrollbar { width: 10px; height: 10px; }
+html.kui-on ::-webkit-scrollbar-track, html.kui-on ::-webkit-scrollbar-corner { background: transparent; }
+html.kui-on ::-webkit-scrollbar-thumb { background: #3a3a3e; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+html.kui-on ::-webkit-scrollbar-thumb:hover { background: #55555b; background-clip: padding-box; }
+
+/* OctoPrint dialogs and notifications float over the app */
+html.kui-on .modal { z-index: 1600 !important; }
+html.kui-on .modal-backdrop { z-index: 1590 !important; }
+html.kui-on .ui-pnotify { z-index: 1700 !important; }
+html.kui-on .ui-pnotify .alert, html.kui-on .ui-pnotify .ui-pnotify-container { background: var(--raised) !important; color: #d6d7da !important; border: 0 !important; border-radius: 8px !important; box-shadow: 0 12px 28px rgba(0,0,0,.45) !important; text-shadow: none !important; font: 13px/20px var(--font) !important; }
+html.kui-on .ui-pnotify h4, html.kui-on .ui-pnotify .ui-pnotify-title { color: #fff !important; font: 600 15px/22px var(--font) !important; }
+html.kui-on .ui-pnotify .alert-error h4, html.kui-on .ui-pnotify .alert-danger h4 { color: var(--negative) !important; }
+html.kui-on .ui-pnotify a { color: var(--accent-ink) !important; }
+html.kui-on .ui-pnotify .btn { border-radius: 999px; background: none; border: 1px solid var(--control); color: #fff; text-shadow: none; box-shadow: none; }
+html.kui-on .ui-pnotify .btn-primary { background: #fff; color: #111; border-color: #fff; }
+/* every OctoPrint / plugin dialog in the app's theme */
+html.kui-on .modal-backdrop, html.kui-on .modal-backdrop.fade.in { background: #000; opacity: .55; }
+html.kui-on .modal { background: var(--raised); color: #d6d7da; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 24px 60px rgba(0,0,0,.55); font: 13px/20px var(--font); }
+html.kui-on .modal-header { background: var(--raised); border-bottom: 1px solid var(--rule); padding: 16px 20px; }
+html.kui-on .modal-header h3 { color: #fff; font: 600 18px/26px var(--font); letter-spacing: -.01em; }
+html.kui-on .modal-header .close, html.kui-on .modal .close { color: #fff; opacity: .55; text-shadow: none; font-weight: 400; }
+html.kui-on .modal-header .close:hover { opacity: 1; }
+html.kui-on .modal-body { background: var(--raised); }
+html.kui-on .modal-footer { background: var(--raised); border-top: 1px solid var(--rule); box-shadow: none; border-radius: 0 0 10px 10px; padding: 14px 20px; }
+html.kui-on .modal h1, html.kui-on .modal h2, html.kui-on .modal h3, html.kui-on .modal h4, html.kui-on .modal h5, html.kui-on .modal label, html.kui-on .modal .control-label { color: #fff; font-family: var(--font); }
+html.kui-on .modal h3 { font-weight: 600; }
+html.kui-on .modal legend { color: #fff; border-bottom: 1px solid var(--rule); font: 600 16px/32px var(--font); }
+html.kui-on .modal a { color: var(--accent-ink); }
+html.kui-on .modal a:hover { color: #ffb487; text-decoration: none; }
+html.kui-on .modal .muted, html.kui-on .modal .help-block, html.kui-on .modal .help-inline, html.kui-on .modal small { color: var(--muted); }
+html.kui-on .modal hr { border-color: var(--rule); }
+html.kui-on .modal code { background: #2c1a20; color: #f0a3b1; border: 0; }
+html.kui-on .modal pre { background: #0d0c10; color: #d6d7da; border: 0; }
+html.kui-on .modal .well { background: #1b1a1f; border: 0; box-shadow: none; }
+html.kui-on .modal .alert { background: var(--pill-warning-bg); color: var(--warning); border: 0; text-shadow: none; border-radius: 8px; }
+html.kui-on .modal .alert-info { background: #18222e; color: #a9c6e8; }
+html.kui-on .modal .alert-error, html.kui-on .modal .alert-danger { background: var(--pill-negative-bg); color: var(--pill-negative-ink); }
+html.kui-on .modal .alert-success { background: var(--pill-positive-bg); color: var(--pill-positive-ink); }
+html.kui-on .modal input, html.kui-on .modal select, html.kui-on .modal textarea, html.kui-on .modal .uneditable-input {
+  background: #1b1a1f !important; color: var(--text) !important; border: 1px solid var(--control) !important; border-radius: 6px; box-shadow: none !important; font-family: var(--font); }
+html.kui-on .modal input:focus, html.kui-on .modal select:focus, html.kui-on .modal textarea:focus { border-color: var(--accent) !important; outline: none; }
+html.kui-on .modal input[type=checkbox], html.kui-on .modal input[type=radio] { accent-color: var(--accent); }
+html.kui-on .modal .add-on { background: var(--raised) !important; color: var(--muted) !important; border-color: var(--control) !important; text-shadow: none; }
+html.kui-on .modal .btn { background: none; background-image: none; border: 1px solid var(--control); color: #fff; text-shadow: none; box-shadow: none; border-radius: 999px; font-family: var(--font); padding: 5px 14px; }
+html.kui-on .modal .btn:hover, html.kui-on .modal .btn:focus { background: #2c2b30; color: #fff; border-color: #5a5a60; }
+html.kui-on .modal .btn-primary { background: #fff; color: #111; border-color: #fff; font-weight: 500; }
+html.kui-on .modal .btn-primary:hover { background: #e6e6e8; color: #111; }
+html.kui-on .modal .btn-danger { color: var(--negative); }
+html.kui-on .modal .btn-success { color: var(--pill-positive-ink); }
+html.kui-on .modal .btn-group > .btn { border-radius: 0; } html.kui-on .modal .btn-group > .btn:first-child { border-radius: 999px 0 0 999px; } html.kui-on .modal .btn-group > .btn:last-child { border-radius: 0 999px 999px 0; }
+html.kui-on .modal .btn.active, html.kui-on .modal .btn:active { background: #2c2b30; box-shadow: inset 0 -1px 0 var(--accent); }
+html.kui-on .modal .table { color: #d6d7da; }
+html.kui-on .modal .table th, html.kui-on .modal .table td { border-color: var(--rule); }
+html.kui-on .modal .table th { color: var(--muted); font-weight: 400; }
+html.kui-on .modal .table-striped tbody > tr:nth-child(odd) > td, html.kui-on .modal .table-striped tbody > tr:nth-child(odd) > th, html.kui-on .modal .table-hover tbody tr:hover > td { background: transparent; }
+html.kui-on .modal .nav-list { padding: 0; margin-left: 0; margin-right: 0; }
+html.kui-on .modal .nav-list > li > a { color: #c9cacd; text-shadow: none; margin: 0; padding: 5px 12px; border-radius: 6px; position: relative; }
+html.kui-on .modal .nav-list > li > a:hover { background: #2c2b30; color: #fff; }
+html.kui-on .modal .nav-list > .active > a, html.kui-on .modal .nav-list > .active > a:hover { background: #2c2b30; color: #fff; text-shadow: none; }
+html.kui-on .modal .nav-list > .active > a::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 1px; background: var(--accent); }
+html.kui-on .modal .nav-list > li > a, html.kui-on .modal .nav-list .nav-header { margin-left: 0 !important; margin-right: 0 !important; }
+html.kui-on .modal .nav-header { color: var(--muted); text-shadow: none; text-transform: none; font: 500 12px var(--font); letter-spacing: 0; padding: 14px 12px 4px; }
+html.kui-on .modal .nav-tabs, html.kui-on .modal .nav-pills { border-bottom: 1px solid var(--rule); }
+html.kui-on .modal .nav-tabs > li > a, html.kui-on .modal .nav-pills > li > a { color: var(--muted); background: none; border: 0; border-radius: 0; margin: 0 18px 0 0; padding: 8px 0; position: relative; }
+html.kui-on .modal .nav-tabs > li > a:hover, html.kui-on .modal .nav-pills > li > a:hover { color: #fff; background: none; }
+html.kui-on .modal .nav-tabs > .active > a, html.kui-on .modal .nav-pills > .active > a, html.kui-on .modal .nav-tabs > .active > a:hover, html.kui-on .modal .nav-pills > .active > a:hover { color: #fff; background: none; border: 0; }
+html.kui-on .modal .nav-tabs > .active > a::after, html.kui-on .modal .nav-pills > .active > a::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--accent); }
+html.kui-on .modal .accordion-group { border-color: var(--rule); }
+html.kui-on .modal .accordion-heading .accordion-toggle { color: #fff; }
+html.kui-on .modal .label, html.kui-on .modal .badge { background: #2c2b30; color: #d6d7da; text-shadow: none; }
+html.kui-on .modal .label-important, html.kui-on .modal .badge-important { background: var(--pill-negative-bg); color: var(--pill-negative-ink); }
+html.kui-on .modal .label-success, html.kui-on .modal .badge-success { background: var(--pill-positive-bg); color: var(--pill-positive-ink); }
+html.kui-on .modal .progress { background: #2a2930; box-shadow: none; } html.kui-on .modal .progress .bar { background: var(--accent); background-image: none; }
+html.kui-on .modal .dropdown-menu { background: var(--raised); border-color: var(--border); box-shadow: 0 12px 28px rgba(0,0,0,.45); }
+html.kui-on .modal .dropdown-menu > li > a { color: #d6d7da; }
+html.kui-on .modal .dropdown-menu > li > a:hover { background: #2c2b30; color: #fff; }
+html.kui-on .modal .slider .slider-track { background: #2a2930; } html.kui-on .modal .slider .slider-selection { background: var(--accent); }
+html.kui-on .modal .table-bordered { border-color: var(--rule); }
+
+#kui, #kui * { box-sizing: border-box; }
+#kui { background: var(--ground); color: var(--text); font: 400 var(--fs-body)/20px var(--font); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+#kui h1, #kui h2, #kui h3, #kui h4, #kui p, #kui ul, #kui dl, #kui dd, #kui pre { margin: 0; padding: 0; color: inherit; text-rendering: auto; }
+#kui a, #kui a:hover, #kui a:focus { color: inherit; text-decoration: none; }
+#kui pre { background: none; border: 0; border-radius: 0; font-size: inherit; word-break: normal; word-wrap: normal; }
+#kui dt { font-weight: 400; } #kui small { font-size: inherit; }
+#kui button { font: inherit; color: inherit; margin: 0; text-shadow: none; line-height: normal; }
+#kui input { font: inherit; margin: 0; box-shadow: none; }
+#kui :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#kui .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+#kui .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#kui [hidden] { display: none !important; }
+
+/* ---------- shell ---------- */
+#kui .app { display: grid; grid-template-columns: 76px 1fr; height: 100%; }
+#kui .rail { border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: stretch; padding: 14px 8px; gap: 4px; height: 100%; }
+#kui .mark { width: 36px; height: 36px; margin: 0 auto 18px; border-radius: 8px; background: var(--accent); color: #1a0d04; display: grid; place-items: center; font: 600 13px var(--font); letter-spacing: -.02em; flex: none; }
+#kui .rail a { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 7px; color: var(--muted); font-size: 11px; line-height: 14px; position: relative; border-radius: 6px; }
+#kui .rail a i { font-size: 16px; height: 18px; }
+#kui .rail a:hover { color: #d6d7da; background: var(--raised); }
+#kui .rail a[aria-current] { color: var(--text); }
+#kui .rail a[aria-current]::before { content: ""; position: absolute; right: -9px; top: 8px; bottom: 8px; width: 1px; background: var(--accent); }
+#kui .rail .sep { flex: 1; }
+
+#kui .main { min-width: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(var(--dock) + 24px); }
+#kui .main.dock-open { padding-bottom: calc(var(--dock) + var(--conh, 260px) + 24px); }
+#kui .top { display: flex; align-items: center; gap: 16px; padding: 18px var(--pad) 14px; min-height: 76px; position: sticky; top: 0; z-index: 15; background: var(--ground); }
+#kui .top h1 { font: 600 var(--fs-title)/32px var(--font); letter-spacing: -.02em; white-space: nowrap; }
+#kui .finding { color: var(--muted); font-size: 14px; min-width: 0; }
+#kui .finding b { color: var(--text); font-weight: 500; }
+#kui .top .right { margin-left: auto; display: flex; align-items: center; gap: 14px; color: var(--muted); flex: none; }
+#kui .state { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--pill-positive-bg); color: var(--pill-positive-ink); font-size: 12px; white-space: nowrap; flex: none; }
+#kui .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+#kui .state.bad { background: var(--pill-negative-bg); color: var(--pill-negative-ink); }
+#kui .state.warn { background: var(--pill-warning-bg); color: var(--pill-warning-ink); }
+#kui .iconbtn { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--control); background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; position: relative; padding: 0; }
+#kui .iconbtn:hover { color: var(--text); border-color: #55555b; }
+#kui .iconbtn.sm { width: 26px; height: 26px; font-size: 11px; }
+#kui .estop { height: 44px; padding: 0 22px 0 18px; border-radius: 999px; border: 0; background: #d93f55; color: #fff; font: 600 15px var(--font); display: inline-flex; align-items: center; gap: 10px; cursor: pointer; box-shadow: 0 0 0 3px #3a1720; white-space: nowrap; touch-action: manipulation; }
+#kui .estop i { font-size: 18px; }
+#kui .estop:hover { background: #e8505f; }
+#kui .estop:active { transform: translateY(1px); }
+
+/* drop-down menus (account, power, file) */
+#kui .pop { position: relative; }
+#kui .menu { position: absolute; right: 0; top: 40px; z-index: 30; min-width: 200px; background: var(--raised); border-radius: 6px; box-shadow: 0 12px 28px rgba(0,0,0,.45); padding: 6px; }
+#kui .menu a, #kui .menu button { display: flex; width: 100%; gap: 10px; align-items: center; padding: 7px 10px; border-radius: 4px; color: var(--text); font-size: 13px; background: none; border: 0; cursor: pointer; text-align: left; white-space: nowrap; }
+#kui .menu a i, #kui .menu button i { width: 14px; color: var(--muted); }
+#kui .menu a:hover, #kui .menu button:hover { background: #2c2b30; }
+#kui .menu .danger, #kui .menu .danger i { color: var(--negative); }
+#kui .menu .who { padding: 7px 10px 9px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--rule); margin-bottom: 4px; }
+
+/* ---------- canvas & cards ---------- */
+#kui .canvas { padding: 10px var(--pad) 0; display: grid; grid-template-columns: repeat(auto-fill, var(--card)); grid-auto-rows: 4px; grid-auto-flow: dense; column-gap: var(--gap); justify-content: center; }
+#kui .card { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow); padding: 18px 20px 20px; align-self: start; min-width: 0; }
+#kui .card.wide { grid-column: span 2; }
+#kui .card h2 { margin: 0 0 14px; font: 600 var(--fs-section)/22px var(--font); display: flex; align-items: center; gap: 10px; }
+#kui .card h2 .aside { margin-left: auto; font: 400 12px var(--font); color: var(--muted); }
+#kui .sub { color: var(--muted); font-size: 12px; }
+#kui .note { color: var(--muted); font-size: 12px; margin: 12px 0 0; line-height: 20px; }
+#kui .empty { color: var(--muted); font-size: 13px; padding: 14px; border: 1px dashed var(--control); border-radius: 6px; }
+#kui .view { padding: 10px var(--pad) 0; }
+
+/* ---------- controls ---------- */
+#kui .krow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#kui .kb { height: var(--control-height); padding: 0 14px; border-radius: var(--radius-control); border: 1px solid var(--control); background: none; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; white-space: nowrap; touch-action: manipulation; color: var(--text); justify-content: center; }
+#kui .kb i { font-size: 13px; width: 14px; text-align: center; color: var(--muted); }
+#kui .kb:hover { border-color: #5a5a60; background: var(--raised); }
+#kui .kb:hover i { color: var(--text); }
+#kui .kb.primary { background: #fff; color: #111; border-color: #fff; font-weight: 500; }
+#kui .kb.primary i { color: #111; }
+#kui .kb.primary:hover { background: #e6e6e8; }
+#kui .kb.danger, #kui .kb.danger i { color: var(--negative); }
+#kui .kb.sm { height: 30px; padding: 0 12px; font-size: 12px; }
+#kui .kb[disabled], #kui .estop[disabled] { opacity: .4; cursor: not-allowed; }
+#kui .kb[disabled]:hover { background: none; border-color: var(--control); }
+#kui .kb.primary[disabled]:hover { background: #fff; }
+#kui .grid2, #kui .grid3, #kui .grid4 { display: grid; gap: 8px; }
+#kui .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } #kui .grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } #kui .grid4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#kui .grid2 .kb, #kui .grid3 .kb, #kui .grid4 .kb { padding: 0 8px; min-width: 0; }
+#kui .kspan2 { grid-column: span 2; } #kui .kspan-all { grid-column: 1 / -1; }
+#kui .seg { display: inline-flex; gap: 18px; }
+#kui .seg button { background: none; border: 0; padding: 6px 0; color: var(--muted); cursor: pointer; display: inline-flex; gap: 7px; align-items: center; position: relative; font-size: 13px; }
+#kui .seg button:hover { color: #d6d7da; }
+#kui .seg button[aria-pressed="true"] { color: var(--text); }
+#kui .seg button[aria-pressed="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--accent); }
+#kui .group + .group { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--rule); }
+#kui .glabel { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+#kui .lbl2 { color: var(--muted); font-size: 12px; font-weight: 500; margin: 0 0 10px; }
+
+/* ---------- live view ---------- */
+#kui .pane { position: relative; height: 420px; border-radius: 4px; background: #0d0c10; overflow: hidden; }
+#kui .pane > .v { position: absolute; inset: 0; }
+#kui .pane .v-empty { position: absolute; inset: 0; display: flex; gap: 8px; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+#kui #kui-v-webcam { display: grid; place-items: center; }
+#kui #kui-webcam { max-width: 100%; max-height: 100%; object-fit: contain; }
+#kui #kui-v-3d #pg-container { position: absolute; inset: 0; width: 100% !important; height: 100% !important; margin: 0; }
+#kui #kui-v-3d #pg-container .pg-view { height: 100% !important; }
+/* the 2D viewer keeps its own layout and is scaled to fit the pane (JS sets --s2d) */
+#kui #kui-v-2d { overflow: hidden; }
+/* the 2D renderer paints a fixed white bed; invert + hue-rotate turns it dark and keeps line hues */
+#kui #kui-v-2d #gcode_canvas { filter: invert(.94) hue-rotate(180deg); border-radius: 2px; }
+#kui #kui-v-2d #canvas_container { position: absolute; left: 50%; top: 50%; transform-origin: center; transform: translate(-50%, -50%) scale(var(--s2d, 1)); margin: 0; }
+#kui .pane .hud { position: absolute; left: 14px; top: 12px; font-size: 12px; color: var(--muted); z-index: 4; pointer-events: none; }
+#kui .pane .hud .num { color: var(--text); }
+#kui .track { margin-top: 16px; }
+#kui .track-head { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+#kui .track-head b { color: var(--text); font-weight: 500; }
+#kui .layers { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: 30px; align-items: end; }
+#kui .layers button { height: 18px; background: #2a2930; border-radius: 1px; border: 0; padding: 0; cursor: pointer; min-width: 0; }
+#kui .layers button.done { background: var(--accent); }
+#kui .layers button.now { height: 30px; background: #fff; }
+#kui .layers button.pause { background: transparent; box-shadow: inset 0 0 0 1px #fff; height: 30px; }
+#kui .layers button:hover { background: #55545c; }
+#kui .layers.off button { cursor: default; }
+#kui .track-foot { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+/* ---------- figures ---------- */
+#kui .klead { display: flex; align-items: baseline; gap: 10px; }
+#kui .klead .big { font: 500 32px/36px var(--mono); letter-spacing: -.02em; }
+#kui .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 16px; }
+#kui .meta div { color: var(--muted); font-size: 12px; }
+#kui .meta .num { display: block; color: var(--text); font-size: 15px; line-height: 22px; }
+#kui .kbar { height: 4px; border-radius: 4px; background: #2a2930; overflow: hidden; margin-top: 12px; }
+#kui .kbar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+#kui .job { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; min-width: 0; }
+#kui .job img, #kui .job .noimg { width: 52px; height: 52px; border-radius: 3px; background: #f4f4f2; object-fit: contain; flex: none; }
+#kui .job .noimg { display: grid; place-items: center; background: var(--raised); color: var(--muted); }
+#kui .job .name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#kui .pauseat { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+#kui .layerbox { height: 30px; border-radius: 999px; border: 1px solid var(--control); display: flex; align-items: center; padding: 0 12px; gap: 8px; min-width: 0; }
+#kui .layerbox:focus-within { border-color: var(--accent); }
+#kui .layerbox .pre { color: var(--muted); font-size: 12px; }
+#kui .layerbox input { background: none !important; border: 0 !important; color: var(--text) !important; width: 100%; font-size: 13px; outline: none; padding: 0; height: 28px; }
+#kui .layerbox input::placeholder { color: var(--muted); }
+#kui .armed { margin-top: 12px; display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; font-size: 12px; color: var(--accent-ink); }
+#kui .armed b { color: var(--text); font-weight: 500; }
+
+#kui .heater { display: grid; grid-template-columns: 1fr auto; row-gap: 6px; padding: 10px 0; }
+#kui .heater + .heater { border-top: 1px solid var(--rule); }
+#kui .heater .hlabel { color: var(--muted); font-size: 12px; }
+#kui .heater .val { font: 500 20px/24px var(--mono); }
+#kui .heater .val small { color: var(--muted); font-size: 13px; font-weight: 400; }
+#kui .heater .tgt { color: var(--muted); font-size: 12px; text-align: right; align-self: end; }
+#kui .heater .tk { grid-column: 1 / -1; height: 4px; background: #2a2930; border-radius: 4px; position: relative; }
+#kui .heater .tk i { position: absolute; left: 0; top: 0; bottom: 0; background: #cfd0d4; border-radius: 4px; transition: width .6s; }
+#kui .heater .tk b { position: absolute; top: -3px; width: 1px; height: 10px; background: var(--accent); }
+#kui .jog { display: grid; grid-template-columns: repeat(3, 40px) 16px 40px; gap: 6px; }
+#kui .jog .kb { width: 40px; height: 34px; padding: 0; font-size: 11px; gap: 4px; }
+#kui .kv { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 0; margin-top: 12px; border-top: 1px solid var(--rule); }
+
+/* ---------- recent files gallery ---------- */
+#kui .gallery { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+#kui .gallery li { min-width: 0; }
+#kui .shot { position: relative; aspect-ratio: 1; border-radius: 4px; background: #f4f4f2; overflow: hidden; }
+#kui .shot img { width: 100%; height: 100%; object-fit: contain; display: block; }
+#kui .shot .noimg { position: absolute; inset: 0; display: grid; place-items: center; color: #8a8c92; font-size: 28px; background: var(--raised); }
+#kui .gallery .shot .kb { position: absolute; right: 8px; bottom: 8px; background: #111; border-color: #111; color: #fff; }
+#kui .gallery .shot .kb i { color: #fff; }
+#kui .fn { margin-top: 8px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#kui .fm { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- files view ---------- */
+#kui .filebar { position: sticky; top: var(--topbar, 76px); z-index: 14; background: var(--ground); padding: 0 0 20px; }
+#kui .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+#kui .filebar .selbar { margin: 14px 0 0; }
+#kui .fm3 > aside, #kui .detail { position: sticky; top: calc(var(--topbar, 76px) + var(--filebar, 54px)); max-height: calc(100vh - var(--topbar, 76px) - var(--filebar, 54px) - var(--dock) - 24px); overflow-y: auto; }
+#kui .search { height: 34px; width: 300px; border-radius: 999px; border: 1px solid var(--control); display: flex; align-items: center; gap: 8px; padding: 0 14px; color: var(--muted); font-size: 13px; }
+#kui .search:focus-within { border-color: var(--accent); }
+#kui .search input { background: none !important; border: 0 !important; color: var(--text) !important; outline: none; width: 100%; height: 30px; padding: 0; font-size: 13px; }
+#kui .search input::placeholder { color: var(--muted); }
+#kui .toolbar .spacer, #kui .selbar .spacer { flex: 1; }
+#kui .selbar { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 8px 0 16px; border-radius: 999px; background: var(--raised); flex-wrap: wrap; }
+#kui .selbar b { font-weight: 500; }
+#kui .fm3 { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+#kui .split { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; min-width: 0; }
+#kui .tiles { display: grid; grid-template-columns: repeat(auto-fill, 196px); gap: 20px 16px; }
+#kui .tile { cursor: pointer; position: relative; min-width: 0; }
+#kui .tile.sel .shot, #kui .tile.sel .folder { box-shadow: 0 0 0 2px #fff; }
+#kui .tile.picked .shot { box-shadow: 0 0 0 2px var(--accent); }
+#kui .tile .chk { position: absolute; left: 8px; top: 8px; width: 22px; height: 22px; border-radius: 6px; background: rgba(17,17,17,.85); border: 1px solid #55555b; display: grid; place-items: center; color: #111; font-size: 12px; }
+#kui .tile.picked .chk { background: var(--accent); border-color: var(--accent); }
+#kui .tile .kebab { position: absolute; right: 8px; top: 8px; width: 26px; height: 26px; border-radius: 999px; background: rgba(17,17,17,.85); color: #fff; display: grid; place-items: center; font-size: 12px; border: 0; cursor: pointer; padding: 0; }
+#kui .tile .menu { right: -60px; top: 40px; }
+#kui .tile .folder { aspect-ratio: 1; border-radius: 4px; background: var(--raised); display: grid; place-items: center; color: var(--muted); font-size: 40px; }
+#kui .detail { background: var(--surface); border-radius: 6px; box-shadow: var(--shadow); padding: 18px 20px 20px; }
+#kui .detail .big { aspect-ratio: 1; border-radius: 4px; background: #f4f4f2; overflow: hidden; margin-bottom: 14px; position: relative; }
+#kui .detail .big img { width: 100%; height: 100%; object-fit: contain; display: block; }
+#kui .detail h3 { font: 600 16px/22px var(--font); overflow-wrap: anywhere; }
+#kui .dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 14px 0 18px; font-size: 13px; }
+#kui .dl dt { color: var(--muted); font-weight: 400; } #kui .dl dd { text-align: right; }
+#kui .folders { list-style: none; }
+#kui .folders li { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border-radius: 6px; color: var(--muted); font-size: 13px; position: relative; cursor: pointer; }
+#kui .folders li:hover { color: #d6d7da; }
+#kui .folders li .n { margin-left: auto; font: 12px var(--mono); }
+#kui .folders li[aria-current] { color: var(--text); }
+#kui .folders li[aria-current]::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 1px; background: var(--accent); }
+#kui .storage { margin-top: 18px; }
+#kui .storage .kbar i { background: #cfd0d4; }
+#kui .dropzone { position: fixed; inset: 0; z-index: 40; background: rgba(23,23,25,.92); display: grid; place-items: center; font-size: 18px; border: 2px dashed var(--accent); }
+
+/* ---------- stat strip, heat map, log, config ---------- */
+#kui .statgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--surface); border-radius: 6px; box-shadow: var(--shadow); margin-bottom: 24px; }
+#kui .statgrid > div { padding: 16px 20px; min-width: 0; }
+#kui .statgrid > div + div { border-left: 1px solid var(--rule); }
+#kui .statgrid .lab { color: var(--muted); font-size: 12px; }
+#kui .statgrid .v { font: 500 20px/28px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#kui .statgrid .v small { color: var(--muted); font-size: 12px; font-weight: 400; }
+#kui .twocol { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 24px; align-items: start; }
+#kui .heat { display: grid; gap: 3px; }
+#kui .heat div { aspect-ratio: 1.4; border-radius: 2px; display: grid; place-items: center; font: 11px var(--mono); }
+#kui .heat-scale { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+#kui .heat-scale .ramp { flex: 1; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #2a5e9e, #1f2a36 50%, #e8792f); }
+#kui #kui-mesh3d { height: 460px; }
+#kui .log { list-style: none; }
+#kui .log li { display: grid; grid-template-columns: 64px 16px 1fr; gap: 8px; padding: 7px 0; font-size: 13px; align-items: start; }
+#kui .log li + li { border-top: 1px solid var(--rule); }
+#kui .log .ts { font: 12px var(--mono); color: var(--muted); padding-top: 1px; }
+#kui .log .ico { color: var(--muted); font-size: 12px; padding-top: 3px; }
+#kui .log .warn .ico, #kui .log .warn .msg { color: var(--warning); }
+#kui .log .ok .ico { color: var(--pill-positive-ink); }
+#kui .log .msg { overflow-wrap: anywhere; }
+#kui .logbox { max-height: 520px; overflow-y: auto; overscroll-behavior: contain; }
+#kui .cfg { list-style: none; }
+#kui .cfg li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 10px 0; align-items: center; }
+#kui .cfg li + li { border-top: 1px solid var(--rule); }
+#kui .cfg .n { font: 13px var(--mono); } #kui .cfg .m { color: var(--muted); font-size: 12px; grid-column: 1; }
+#kui .cfg .kb, #kui .cfg .state, #kui .cfg .side { grid-column: 2; grid-row: 1 / span 2; }
+
+/* ---------- config editor ---------- */
+#kui .editor { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; align-items: start; }
+#kui .flist { list-style: none; }
+#kui .flist li { display: grid; grid-template-columns: 16px 1fr auto; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 6px; font-size: 13px; position: relative; cursor: pointer; }
+#kui .flist li:hover { background: #1c1b20; }
+#kui .flist li .m { grid-column: 2 / -1; color: var(--muted); font-size: 12px; margin-top: -4px; }
+#kui .flist li i { color: var(--muted); }
+#kui .flist li[aria-current] { background: var(--raised); }
+#kui .flist li .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); }
+#kui .flist li .lnk { color: var(--muted); text-decoration: underline; font-size: 12px; background: none; border: 0; cursor: pointer; padding: 0; }
+#kui .code { background: #0d0c10; border-radius: 6px; overflow: hidden; }
+#kui .code .bar2 { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--rule); font-size: 13px; flex-wrap: wrap; }
+#kui .code .bar2 .dirty { color: var(--warning); font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+#kui .code .bar2 .spacer { flex: 1; }
+#kui .code .findbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--rule); }
+#kui .code .area { position: relative; height: 560px; }
+#kui .code .gutter, #kui .code .hl, #kui .code textarea { font: 13px/21px var(--mono) !important; tab-size: 4; padding-top: 12px; padding-bottom: 12px; letter-spacing: 0; }
+#kui .code .gutter { position: absolute; left: 0; top: 0; bottom: 0; width: 58px; overflow: hidden; color: #4f4e56; text-align: right; padding-right: 14px; user-select: none; }
+#kui .code .gutter span { display: block; height: 21px; }
+#kui .code .gutter span.chg { color: var(--warning); }
+#kui .code .hl, #kui .code textarea { position: absolute; left: 58px; right: 0; top: 0; bottom: 0; margin: 0; white-space: pre; overflow: auto; padding-left: 0; padding-right: 16px; }
+#kui .code .hl { pointer-events: none; color: #d6d7da; overflow: hidden; }
+#kui .code .hl span.l { display: block; height: 21px; }
+#kui .code .hl span.l.chg { background: #2a2416; }
+#kui .code .chgband { position: absolute; left: 0; right: 0; height: 21px; background: #2a2416; pointer-events: none; }
+#kui .code textarea { background: transparent !important; border: 0 !important; color: transparent !important; caret-color: #fff; resize: none; outline: none; box-shadow: none !important; border-radius: 0 !important; width: auto; height: auto; }
+#kui .code textarea::selection { background: rgba(232,121,47,.35); color: transparent; }
+#kui .code .sec { color: #fff; font-weight: 500; } #kui .code .key { color: #a9c6e8; } #kui .code .cm { color: #6b6a72; } #kui .code .ro { color: #55545c; }
+#kui .code .foot { display: flex; gap: 16px; align-items: center; min-height: 36px; padding: 0 16px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--muted); }
+#kui .code .foot .good { color: var(--pill-positive-ink); } #kui .code .foot .bad { color: var(--negative); }
+#kui .diff { font: 12px/19px var(--mono); max-height: 60vh; overflow: auto; background: #0d0c10; border-radius: 4px; padding: 8px 0; margin-top: 10px; }
+#kui .diff div { white-space: pre; padding: 0 12px; }
+#kui .diff .add { background: #16261d; color: #8fd8b1; } #kui .diff .del { background: #2c1a20; color: #f0a3b1; } #kui .diff .gap { color: var(--muted); }
+
+/* ---------- console dock ---------- */
+#kui .dock { position: fixed; left: 76px; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--border); }
+#kui .dock .dgrip { position: absolute; left: 0; right: 0; top: -4px; height: 9px; cursor: ns-resize; z-index: 2; touch-action: none; }
+#kui .dock .dgrip::after { content: ""; position: absolute; left: 50%; top: 3px; width: 36px; height: 3px; margin-left: -18px; border-radius: 3px; background: var(--control); opacity: 0; transition: opacity .15s; }
+#kui .dock:hover .dgrip::after, #kui .dock .dgrip.dragging::after { opacity: 1; }
+#kui .dock .dhead { display: flex; align-items: center; gap: 10px; height: 28px; padding: 0 var(--pad); font-size: 12px; color: var(--muted); cursor: pointer; border: 0; background: none; width: 100%; text-align: left; }
+#kui .dock .dhead b { color: var(--text); font-weight: 500; }
+#kui .dock .dhead .last { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#kui .dock .lines { height: var(--conh, 260px); overflow-y: auto; overscroll-behavior: contain; padding: 4px var(--pad); }
+#kui .con { font: 12px/18px var(--mono); color: #c9cacd; }
+#kui .con div { white-space: pre-wrap; overflow-wrap: anywhere; }
+#kui .con .t { color: var(--muted); margin-right: 8px; }
+#kui .con .send { color: var(--accent-ink); } #kui .con .ok { color: var(--pill-positive-ink); } #kui .con .err { color: var(--warning); }
+#kui .prompt { display: flex; align-items: center; gap: 8px; height: 30px; border-top: 1px solid var(--rule); padding: 0 var(--pad); font: 12px var(--mono); color: var(--muted); position: relative; }
+#kui .prompt .kcaret { color: var(--accent); }
+#kui .prompt .inwrap { position: relative; flex: 1; height: 28px; }
+#kui .prompt input, #kui .prompt .ghost { position: absolute; inset: 0; font: 12px/28px var(--mono) !important; padding: 0 !important; height: 28px; }
+#kui .prompt input { background: transparent !important; border: 0 !important; color: var(--text) !important; outline: none; width: 100%; }
+#kui .prompt .ghost { color: #55555b; pointer-events: none; white-space: pre; }
+#kui .prompt .hint { font: 11px var(--font); color: var(--muted); white-space: nowrap; }
+#kui .kbd { font: 11px var(--mono); border: 1px solid var(--control); border-radius: 4px; padding: 0 5px; color: #c9cacd; }
+
+/* ---------- dialogs ---------- */
+#kui .kmodalwrap { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 60; overscroll-behavior: contain; }
+#kui .kmodal { background: var(--raised); border-radius: 8px; width: 500px; max-width: calc(100% - 32px); padding: 18px 20px; box-shadow: 0 12px 28px rgba(0,0,0,.45); position: relative; }
+#kui .kmodal.wide { width: 860px; }
+#kui .kmodal h4 { margin: 0 0 8px; font: 600 16px/22px var(--font); display: flex; gap: 10px; align-items: center; padding-right: 28px; }
+#kui .kmodal p { margin: 4px 0; color: #d6d7da; }
+#kui .kmodal .kclose { position: absolute; right: 14px; top: 14px; }
+#kui .kmodal .foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+#kui .kmodal .foot .kb { padding: 0 12px; }
+#kui .kmodal .steps { display: flex; gap: 14px; color: var(--muted); font-size: 12px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+#kui .kmodal .steps span { display: flex; gap: 5px; align-items: center; }
+#kui .field { margin-top: 12px; }
+#kui .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+#kui .field input, #kui .field select { width: 100%; height: 36px; border-radius: 6px !important; border: 1px solid var(--control) !important; background: #1b1a1f !important; color: var(--text) !important; padding: 0 12px; font-size: 16px; }
+#kui .totop { position: fixed; right: 24px; bottom: calc(var(--dock) + var(--conh-open, 0px) + 16px); z-index: 19; height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--control); background: var(--raised); color: var(--text); display: inline-flex; gap: 8px; align-items: center; cursor: pointer; box-shadow: 0 12px 28px rgba(0,0,0,.45); font-size: 13px; }
+#kui .totop i { color: var(--muted); }
+#kui .totop:hover { border-color: #5a5a60; }
+#kui .toast { position: fixed; right: 24px; bottom: calc(var(--dock) + var(--conh-open, 0px) + 64px); z-index: 50; background: var(--raised); border-radius: 6px; box-shadow: 0 12px 28px rgba(0,0,0,.45); padding: 12px 16px; font-size: 13px; display: flex; gap: 10px; align-items: center; max-width: 420px; }
+#kui .toast.bad i { color: var(--negative); } #kui .toast.good i { color: var(--pill-positive-ink); }
+
+/* ---------- phone & tablet ---------- */
+@media (max-width: 1100px) {
+  #kui .split, #kui .twocol, #kui .fm3, #kui .editor { grid-template-columns: minmax(0, 1fr); }
+  #kui .detail { position: static; }
+  #kui .statgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #kui .statgrid > div:nth-child(3) { border-left: 0; }
+}
+@media (max-width: 760px) {
+  #kui .app { grid-template-columns: 1fr; }
+  #kui .rail { position: fixed; bottom: 0; left: 0; height: 60px; width: 100%; flex-direction: row; border-right: 0; border-top: 1px solid var(--border); background: var(--ground); z-index: 25; padding: 4px 8px; }
+  #kui .rail .mark, #kui .rail .sep { display: none; }
+  #kui .rail a { flex: 1; }
+  #kui .rail a[aria-current]::before { right: 20%; left: 20%; top: -5px; bottom: auto; width: auto; height: 1px; }
+  #kui .main { padding-bottom: calc(60px + var(--dock) + 24px); }
+  #kui .dock { left: 0; bottom: 60px; }
+  #kui .canvas { grid-template-columns: minmax(0, 1fr); padding: 16px 16px 0; }
+  #kui .card.wide { grid-column: auto !important; }
+  #kui .view { padding: 16px 16px 0; }
+  #kui .top { flex-wrap: wrap; padding: 16px 16px 0; gap: 4px 12px; }
+  #kui .top h1 { font-size: 22px; line-height: 28px; }
+  #kui .top .finding { order: 3; flex-basis: 100%; }
+  #kui .top .right { gap: 8px; }
+  #kui .estop { height: 40px; padding: 0 14px; font-size: 14px; }
+  #kui .estop .lbl { display: none; }
+  #kui .top .state { display: none; }
+  #kui .seg { gap: 12px; } #kui .seg .long { display: none; }
+  #kui .pane { height: 300px; }
+  #kui .gallery, #kui .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #kui .search { width: 100%; }
+  #kui .prompt .hint { display: none; }
+  #kui .dock .dhead, #kui .prompt, #kui .dock .lines { padding-left: 16px; padding-right: 16px; }
+  #kui .kmodal .foot .kb { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) { #kui * { transition: none !important; } }

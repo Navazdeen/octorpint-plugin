@@ -1,0 +1,567 @@
+<!-- Kobra UI: full-screen app, built 1:1 from the approved mockups. Bound to KobraUiViewModel. -->
+<script type="text/html" id="kui-topright">
+  <span class="state" data-bind="text: stateLabel(), css: stateClass()"></span>
+  <div class="pop">
+    <button class="iconbtn" aria-label="Account" data-bind="click: function() { toggleMenu('account') }, attr: { 'aria-expanded': openMenu() === 'account' }"><i class="fa-regular fa-user"></i></button>
+    <div class="menu" role="menu" data-bind="visible: openMenu() === 'account'">
+      <div class="who" data-bind="text: 'Signed in as ' + userName()"></div>
+      <button data-bind="click: classicUi"><i class="fa-solid fa-table-columns"></i>Classic OctoPrint</button>
+      <button data-bind="click: openSettings"><i class="fa-solid fa-gear"></i>OctoPrint settings</button>
+      <button data-bind="click: logout"><i class="fa-solid fa-arrow-right-from-bracket"></i>Log out</button>
+    </div>
+  </div>
+  <div class="pop">
+    <button class="iconbtn" aria-label="Power menu" data-bind="click: function() { toggleMenu('power') }, attr: { 'aria-expanded': openMenu() === 'power' }"><i class="fa-solid fa-power-off"></i></button>
+    <div class="menu" role="menu" data-bind="visible: openMenu() === 'power'">
+      <!-- ko foreach: systemCommands -->
+      <button data-bind="click: $root.runSystemCommand, css: { danger: $data.action !== 'restart' }"><i class="fa-solid" data-bind="css: $data.icon"></i><span data-bind="text: $data.name + '…'"></span></button>
+      <!-- /ko -->
+      <div class="who" data-bind="visible: !systemCommands().length">No system commands set up in OctoPrint.</div>
+    </div>
+  </div>
+  <button class="estop" aria-label="Emergency stop: halts the printer immediately" data-bind="click: emergencyStop"><i class="fa-solid fa-hand"></i><span class="lbl">Emergency stop</span></button>
+</script>
+
+<div id="kui" data-bind="event: { keydown: onKeyDown }">
+  <div class="app">
+    <nav class="rail" aria-label="Main">
+      <div class="mark" aria-hidden="true">K2</div>
+      <a href="?kui=printer" data-bind="click: nav, attr: { 'aria-current': route() === 'printer' ? 'page' : null }"><i class="fa-solid fa-print"></i>Printer</a>
+      <a href="?kui=files" data-bind="click: nav, attr: { 'aria-current': route() === 'files' ? 'page' : null }"><i class="fa-regular fa-folder-open"></i>Files</a>
+      <a href="?kui=mesh" data-bind="click: nav, attr: { 'aria-current': route() === 'mesh' ? 'page' : null }"><i class="fa-solid fa-chart-area"></i>Mesh</a>
+      <a href="?kui=klipper" data-bind="click: nav, attr: { 'aria-current': (route() === 'klipper' || route() === 'editor') ? 'page' : null }"><i class="fa-solid fa-microchip"></i>Klipper</a>
+      <span class="sep"></span>
+      <a href="javascript:void(0)" data-bind="click: openSettings"><i class="fa-solid fa-gear"></i>Settings</a>
+    </nav>
+
+    <main class="main" id="kui-main" data-bind="css: { 'dock-open': dockOpen() }, event: { scroll: mainScroll }">
+
+      <!-- ================= PRINTER ================= -->
+      <section data-bind="visible: route() === 'printer'" aria-labelledby="kui-h1-printer">
+        <header class="top">
+          <h1 id="kui-h1-printer">Kobra 2 Neo</h1>
+          <span class="finding" data-bind="html: printerFinding()"></span>
+          <div class="right" data-bind="template: { name: 'kui-topright' }"></div>
+        </header>
+
+        <div class="canvas" id="kui-canvas">
+          <section class="card wide" aria-labelledby="kui-h-view">
+            <h2 id="kui-h-view">Live view
+              <span class="seg" style="margin-left:auto" role="group" aria-label="View">
+                <button data-bind="attr: { 'aria-pressed': viewMode() === 'webcam' ? 'true' : 'false' }, click: function() { setViewMode('webcam') }"><i class="fa-solid fa-video"></i>Webcam</button>
+                <button data-bind="attr: { 'aria-pressed': viewMode() === '3d' ? 'true' : 'false' }, click: function() { setViewMode('3d') }"><i class="fa-solid fa-cube"></i><span>3D<span class="long"> toolpath</span></span></button>
+                <button data-bind="attr: { 'aria-pressed': viewMode() === '2d' ? 'true' : 'false' }, click: function() { setViewMode('2d') }"><i class="fa-regular fa-square"></i><span>2D<span class="long"> layer</span></span></button>
+              </span></h2>
+            <div class="pane">
+              <div class="v" id="kui-v-webcam" data-bind="visible: viewMode() === 'webcam'">
+                <img id="kui-webcam" alt="Live webcam of the printer">
+                <div class="v-empty" data-bind="visible: !webcamUrl()"><i class="fa-solid fa-video-slash"></i>No webcam stream is set up in OctoPrint</div>
+              </div>
+              <div class="v" id="kui-v-3d" data-bind="visible: viewMode() === '3d'">
+                <div class="v-empty" data-bind="visible: !has3d()"><i class="fa-solid fa-cube"></i>Install PrettyGCode to see the 3D toolpath</div>
+              </div>
+              <div class="v" id="kui-v-2d" data-bind="visible: viewMode() === '2d'">
+                <div class="v-empty" data-bind="visible: !has2d()"><i class="fa-regular fa-square"></i>OctoPrint's GCode Viewer is turned off</div>
+              </div>
+              <div class="hud" data-bind="visible: viewMode() !== 'webcam' && layerTotal() > 0 && (isPrinting() || isPaused())">Following layer <span class="num" data-bind="text: layerCurrent()"></span> · Z <span class="num" data-bind="text: zNow()"></span> mm</div>
+            </div>
+            <div class="track">
+              <div class="track-head">
+                <span data-bind="text: layerTotal() > 0 ? 'Layers. Click one to pause there.' : 'Layers appear here while a print runs.'"></span>
+                <span data-bind="html: armedTrackText()"></span>
+              </div>
+              <div class="layers" aria-label="Layer track" data-bind="foreach: layerCells, css: { off: !(isPrinting() || isPaused()) }">
+                <button data-bind="css: $data.cls, attr: { title: $data.title, 'aria-label': $data.title }, click: function() { $root.pauseAtLayerClick($data.layer) }"></button>
+              </div>
+              <div class="track-foot" data-bind="foreach: layerTicks"><span class="num" data-bind="text: $data"></span></div>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="kui-h-job">
+            <h2 id="kui-h-job">Print job <span class="aside" data-bind="html: jobAside()"></span></h2>
+            <!-- ko if: fileName() -->
+            <div class="job">
+              <!-- ko if: jobThumb() --><img data-bind="attr: { src: jobThumb() }" alt=""><!-- /ko -->
+              <!-- ko ifnot: jobThumb() --><span class="noimg"><i class="fa-regular fa-file-code"></i></span><!-- /ko -->
+              <div style="min-width:0"><div class="name" data-bind="text: shortName(fileName())"></div><div class="sub" data-bind="html: jobSubline()"></div></div>
+            </div>
+            <!-- /ko -->
+            <!-- ko ifnot: fileName() -->
+            <p class="empty">No file selected. Pick one from Recent files or Files.</p>
+            <!-- /ko -->
+            <!-- ko if: isPrinting() || isPaused() -->
+            <div class="klead"><span class="big num" data-bind="text: progress().toFixed(1) + '%'"></span><span class="sub" data-bind="html: layerTotal() > 0 ? 'layer <span class=&quot;num&quot;>' + layerCurrent() + '</span> of <span class=&quot;num&quot;>' + layerTotal() + '</span>' : 'by file position'"></span></div>
+            <div class="kbar"><i data-bind="style: { width: progress() + '%' }"></i></div>
+            <div class="meta">
+              <div>Elapsed<span class="num" data-bind="text: fmtDur(printTime())"></span></div>
+              <div>Left<span class="num" data-bind="text: fmtDur(timeLeft())"></span></div>
+              <div>Done at<span class="num" data-bind="text: finishClock()"></span></div>
+            </div>
+            <!-- /ko -->
+            <div class="grid2" data-bind="style: { marginTop: (isPrinting() || isPaused()) ? '0' : '14px' }">
+              <!-- ko if: isPaused() -->
+              <button class="kb primary" data-bind="click: resumePrint"><i class="fa-solid fa-play"></i>Resume</button>
+              <!-- /ko -->
+              <!-- ko if: isPrinting() -->
+              <button class="kb primary" data-bind="click: pausePrint"><i class="fa-solid fa-pause"></i>Pause</button>
+              <!-- /ko -->
+              <!-- ko if: !isPrinting() && !isPaused() -->
+              <button class="kb primary" data-bind="enable: canStart(), click: startPrint"><i class="fa-solid fa-play"></i>Start print</button>
+              <!-- /ko -->
+              <button class="kb danger" data-bind="enable: isPrinting() || isPaused(), click: cancelPrint"><i class="fa-solid fa-stop"></i>Cancel…</button>
+              <button class="kb kspan2" data-bind="enable: isPrinting(), click: function() { gcode('M600') }"><i class="fa-solid fa-arrows-rotate"></i>Change filament now</button>
+            </div>
+            <div class="group" style="margin-top:16px">
+              <div class="glabel">Pause later</div>
+              <div class="pauseat">
+                <span class="layerbox"><span class="pre">Layer</span><input class="num" inputmode="numeric" autocomplete="off" aria-label="Layer number" placeholder="50…" data-bind="textInput: pauseLayerInput, event: { keydown: pauseLayerKey }"></span>
+                <button class="kb sm" data-bind="enable: isOperational(), click: setPauseAtLayer"><i class="fa-solid fa-pause"></i>Pause at layer</button>
+              </div>
+              <div class="grid2" style="margin-top:8px">
+                <button class="kb sm" data-bind="enable: isOperational(), click: setPauseNextLayer"><i class="fa-solid fa-forward-step"></i>Next layer</button>
+                <span class="seg" role="group" aria-label="What happens at that layer" style="justify-content:center">
+                  <button data-bind="attr: { 'aria-pressed': pauseMacro() === 'PAUSE' ? 'true' : 'false' }, click: function() { pauseMacro('PAUSE') }">Pause</button>
+                  <button data-bind="attr: { 'aria-pressed': pauseMacro() === 'M600' ? 'true' : 'false' }, click: function() { pauseMacro('M600') }">M600</button>
+                </span>
+              </div>
+              <div class="armed" data-bind="visible: armedText()"><i class="fa-regular fa-bell"></i><span data-bind="html: armedText()"></span><button class="iconbtn sm" aria-label="Clear the armed pause" data-bind="click: clearPauseLayer"><i class="fa-solid fa-xmark"></i></button></div>
+            </div>
+          </section>
+
+          <section class="card wide" aria-labelledby="kui-h-recent">
+            <h2 id="kui-h-recent">Recent files <a class="aside" href="?kui=files" data-bind="click: nav">All <span class="num" data-bind="text: fileCount()"></span> files</a></h2>
+            <ul class="gallery" data-bind="foreach: recentFiles">
+              <li>
+                <div class="shot">
+                  <!-- ko if: $data.thumb --><img data-bind="attr: { src: $data.thumb, alt: $data.short }" loading="lazy"><!-- /ko -->
+                  <!-- ko ifnot: $data.thumb --><span class="noimg"><i class="fa-regular fa-file-code"></i></span><!-- /ko -->
+                  <button class="kb sm" data-bind="enable: $root.canStartAny(), click: function() { $root.printFile($data) }"><i class="fa-solid fa-play"></i>Print</button>
+                </div>
+                <div class="fn" data-bind="text: $data.short, attr: { title: $data.name }"></div>
+                <div class="fm" data-bind="html: $data.metaLine"></div>
+              </li>
+            </ul>
+            <p class="empty" data-bind="visible: !recentFiles().length">No files yet. Upload from Orca or the Files screen.</p>
+          </section>
+
+          <section class="card" aria-labelledby="kui-h-temp">
+            <h2 id="kui-h-temp">Temperatures</h2>
+            <div class="heater"><span class="hlabel">Nozzle</span><span class="tgt" data-bind="html: toolTarget() > 0 ? 'target <span class=&quot;num&quot;>' + Math.round(toolTarget()) + '</span>' : 'off'"></span>
+              <span class="val num"><span data-bind="text: toolActual().toFixed(1)"></span><small>°C</small></span><span></span>
+              <span class="tk"><i data-bind="style: { width: pct(toolActual(), 280) }"></i><b data-bind="visible: toolTarget() > 0, style: { left: pct(toolTarget(), 280) }"></b></span></div>
+            <div class="heater"><span class="hlabel">Bed</span><span class="tgt" data-bind="html: bedTarget() > 0 ? 'target <span class=&quot;num&quot;>' + Math.round(bedTarget()) + '</span>' : 'off'"></span>
+              <span class="val num"><span data-bind="text: bedActual().toFixed(1)"></span><small>°C</small></span><span></span>
+              <span class="tk"><i data-bind="style: { width: pct(bedActual(), 120) }"></i><b data-bind="visible: bedTarget() > 0, style: { left: pct(bedTarget(), 120) }"></b></span></div>
+            <div class="glabel" style="margin-top:12px">Preheat</div>
+            <div class="grid3">
+              <button class="kb sm" data-bind="enable: canHeat(), click: function() { gcode('PREHEAT MATERIAL=PLA') }"><i class="fa-solid fa-fire-flame-simple"></i>PLA</button>
+              <button class="kb sm" data-bind="enable: canHeat(), click: function() { gcode('PREHEAT MATERIAL=PETG') }"><i class="fa-solid fa-fire-flame-simple"></i>PETG</button>
+              <button class="kb sm" data-bind="enable: canHeat(), click: function() { gcode('PREHEAT MATERIAL=ABS') }"><i class="fa-solid fa-fire-flame-simple"></i>ABS</button>
+              <button class="kb sm" data-bind="enable: canHeat(), click: function() { gcode('PREHEAT MATERIAL=TPU') }"><i class="fa-solid fa-fire-flame-simple"></i>TPU</button>
+              <button class="kb sm kspan2" data-bind="enable: canHeat(), click: function() { gcode('COOLDOWN') }"><i class="fa-regular fa-snowflake"></i>Cool down</button>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="kui-h-move">
+            <h2 id="kui-h-move">Motion</h2>
+            <div class="jog" role="group" aria-label="Jog">
+              <span></span><button class="kb" aria-label="Y plus" data-bind="enable: canJog(), click: function() { jog('y', 1) }"><i class="fa-solid fa-arrow-up"></i>Y</button><span></span><span></span><button class="kb" aria-label="Z up" data-bind="enable: canJog(), click: function() { jog('z', 1) }"><i class="fa-solid fa-arrow-up"></i>Z</button>
+              <button class="kb" aria-label="X minus" data-bind="enable: canJog(), click: function() { jog('x', -1) }"><i class="fa-solid fa-arrow-left"></i>X</button><button class="kb" aria-label="Home X and Y" data-bind="enable: canMachine(), click: function() { home(['x', 'y']) }"><i class="fa-solid fa-house"></i></button><button class="kb" aria-label="X plus" data-bind="enable: canJog(), click: function() { jog('x', 1) }">X<i class="fa-solid fa-arrow-right"></i></button><span></span><button class="kb" aria-label="Home Z" data-bind="enable: canMachine(), click: function() { home(['z']) }"><i class="fa-solid fa-house"></i>Z</button>
+              <span></span><button class="kb" aria-label="Y minus" data-bind="enable: canJog(), click: function() { jog('y', -1) }"><i class="fa-solid fa-arrow-down"></i>Y</button><span></span><span></span><button class="kb" aria-label="Z down" data-bind="enable: canJog(), click: function() { jog('z', -1) }"><i class="fa-solid fa-arrow-down"></i>Z</button>
+            </div>
+            <div class="krow" style="margin-top:12px;justify-content:space-between"><span class="seg" role="group" aria-label="Step" data-bind="foreach: jogSteps"><button class="num" data-bind="text: $data, attr: { 'aria-pressed': $root.jogStep() === $data ? 'true' : 'false' }, click: function() { $root.jogStep($data) }"></button></span><span class="sub">mm per click</span></div>
+            <div class="kv"><span class="sub">Z offset</span><span class="num" data-bind="text: fmtSigned(zOffset(), 3) + ' mm'"></span></div>
+            <div class="grid4" style="margin-top:8px">
+              <button class="kb sm" aria-label="Lower 0.05 mm" data-bind="enable: isOperational(), click: function() { adjustZ(-0.05) }"><i class="fa-solid fa-angles-down"></i><span class="num">.05</span></button>
+              <button class="kb sm" aria-label="Lower 0.01 mm" data-bind="enable: isOperational(), click: function() { adjustZ(-0.01) }"><i class="fa-solid fa-angle-down"></i><span class="num">.01</span></button>
+              <button class="kb sm" aria-label="Raise 0.01 mm" data-bind="enable: isOperational(), click: function() { adjustZ(0.01) }"><i class="fa-solid fa-angle-up"></i><span class="num">.01</span></button>
+              <button class="kb sm" aria-label="Raise 0.05 mm" data-bind="enable: isOperational(), click: function() { adjustZ(0.05) }"><i class="fa-solid fa-angles-up"></i><span class="num">.05</span></button>
+            </div>
+            <div class="kv"><span class="sub">Part fan</span><span class="num" data-bind="text: Math.round(fanSpeed() * 100) + '%'"></span></div>
+            <div class="grid3" style="margin-top:8px">
+              <button class="kb sm" data-bind="enable: isOperational(), click: function() { gcode('M106 S0') }"><i class="fa-solid fa-power-off"></i>Off</button>
+              <button class="kb sm" data-bind="enable: isOperational(), click: function() { gcode('M106 S128') }"><i class="fa-solid fa-fan"></i><span class="num">50%</span></button>
+              <button class="kb sm" data-bind="enable: isOperational(), click: function() { gcode('M106 S255') }"><i class="fa-solid fa-wind"></i><span class="num">100%</span></button>
+            </div>
+          </section>
+
+          <section class="card" aria-labelledby="kui-h-fil">
+            <h2 id="kui-h-fil">Filament</h2>
+            <div class="grid2">
+              <button class="kb" data-bind="enable: canFilament(), click: function() { gcode('LOAD_FILAMENT') }"><i class="fa-solid fa-arrow-down-long"></i>Load</button>
+              <button class="kb" data-bind="enable: canFilament(), click: function() { gcode('UNLOAD_FILAMENT') }"><i class="fa-solid fa-arrow-up-long"></i>Unload</button>
+              <button class="kb sm" data-bind="enable: canFilament(), click: function() { gcode('_EXTRUDE LENGTH=5 SPEED=5') }"><i class="fa-solid fa-angles-down"></i>Extrude <span class="num">5</span></button>
+              <button class="kb sm" data-bind="enable: canFilament(), click: function() { gcode('_EXTRUDE LENGTH=-5 SPEED=30') }"><i class="fa-solid fa-angles-up"></i>Retract <span class="num">5</span></button>
+              <button class="kb kspan2" data-bind="enable: canFilament(), click: function() { gcode('PURGE_FILAMENT LENGTH=20') }"><i class="fa-solid fa-droplet"></i>Purge <span class="num">20</span> mm</button>
+            </div>
+            <p class="note">While printing, load and purge happen at the park spot. When idle, the head goes to the purge tower at X0 and wipes afterwards.</p>
+          </section>
+
+          <section class="card" aria-labelledby="kui-h-mach">
+            <h2 id="kui-h-mach">Machine</h2>
+            <div class="group"><div class="grid2">
+              <button class="kb sm" data-bind="enable: canMachine(), click: function() { gcode('G28') }"><i class="fa-solid fa-house"></i>Home</button>
+              <button class="kb sm" data-bind="enable: canMachine(), click: function() { gcode('PARK') }"><i class="fa-solid fa-square-parking"></i>Park</button>
+              <button class="kb sm" data-bind="enable: canMachine(), click: function() { gcode('CLEAN_NOZZLE') }"><i class="fa-solid fa-broom"></i>Clean nozzle</button>
+              <button class="kb sm" data-bind="enable: canMachine(), click: meshCalibrate"><i class="fa-solid fa-table-cells"></i>Bed mesh…</button>
+              <button class="kb sm kspan2" data-bind="enable: canMachine(), click: function() { gcode('M84') }"><i class="fa-solid fa-lock-open"></i>Motors off</button>
+            </div></div>
+            <div class="group"><div class="glabel">Tune</div><div class="grid2">
+              <button class="kb sm" data-bind="enable: canMachine(), click: function() { confirmGcode('PID tune the hotend?', 'Heats the nozzle to 220 °C several times, about 5 minutes. Run SAVE_CONFIG afterwards to keep the result.', 'Start tuning', 'PID_HOTEND') }"><i class="fa-solid fa-wave-square"></i>PID hotend…</button>
+              <button class="kb sm" data-bind="enable: canMachine(), click: function() { confirmGcode('PID tune the bed?', 'Heats the bed to 60 °C several times, about 10 minutes. Run SAVE_CONFIG afterwards to keep the result.', 'Start tuning', 'PID_BED') }"><i class="fa-solid fa-wave-square"></i>PID bed…</button>
+              <button class="kb sm kspan2" data-bind="enable: canMachine(), click: function() { gcode('DRY_FILAMENT') }"><i class="fa-regular fa-sun"></i>Dry filament</button>
+            </div></div>
+            <div class="group"><div class="grid2">
+              <button class="kb sm danger" data-bind="enable: isConnected(), click: firmwareRestart"><i class="fa-solid fa-rotate-right"></i>Restart…</button>
+              <button class="kb sm danger" data-bind="click: emergencyStop"><i class="fa-solid fa-hand"></i>E-stop</button>
+            </div></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ================= FILES ================= -->
+      <section data-bind="visible: route() === 'files'" aria-labelledby="kui-h1-files">
+        <header class="top"><h1 id="kui-h1-files">Files</h1><span class="finding" data-bind="html: filesFinding()"></span>
+          <div class="right" data-bind="template: { name: 'kui-topright' }"></div></header>
+        <div class="view">
+          <div class="filebar" id="kui-filebar">
+          <div class="toolbar">
+            <label class="search"><i class="fa-solid fa-magnifying-glass"></i><span class="sr">Search files</span><input type="search" placeholder="Search files…" autocomplete="off" spellcheck="false" data-bind="textInput: fileQuery"></label>
+            <span class="seg" role="group" aria-label="Sort">
+              <button data-bind="attr: { 'aria-pressed': fileSort() === 'date' ? 'true' : 'false' }, click: function() { fileSort('date') }">Newest</button>
+              <button data-bind="attr: { 'aria-pressed': fileSort() === 'name' ? 'true' : 'false' }, click: function() { fileSort('name') }">Name</button>
+              <button data-bind="attr: { 'aria-pressed': fileSort() === 'time' ? 'true' : 'false' }, click: function() { fileSort('time') }">Print time</button>
+            </span>
+            <span class="spacer"></span>
+            <button class="kb" data-bind="click: toggleSelectMode, attr: { 'aria-pressed': selectMode() ? 'true' : 'false' }"><i class="fa-regular fa-square-check"></i>Select</button>
+            <button class="kb" data-bind="click: newFolder"><i class="fa-solid fa-folder-plus"></i>New folder</button>
+            <button class="kb primary" data-bind="click: pickUpload"><i class="fa-solid fa-upload"></i>Upload</button>
+            <input type="file" id="kui-upload" accept=".gcode,.gco,.g,.bgcode" multiple hidden data-bind="event: { change: uploadPicked }">
+          </div>
+          <div class="selbar" data-bind="visible: selectMode()">
+            <i class="fa-regular fa-square-check"></i><b><span class="num" data-bind="text: picked().length"></span> <span data-bind="text: picked().length === 1 ? 'file' : 'files'"></span> selected</b><span class="sub" data-bind="html: '· ' + fmtSize(pickedSize())"></span><span class="spacer"></span>
+            <button class="kb sm" data-bind="enable: picked().length, click: function() { moveFiles(picked()) }"><i class="fa-solid fa-folder-open"></i>Move to…</button>
+            <button class="kb sm" data-bind="enable: picked().length, click: function() { downloadFiles(picked()) }"><i class="fa-solid fa-download"></i>Download</button>
+            <button class="kb sm danger" data-bind="enable: picked().length, click: function() { deleteFiles(picked()) }"><i class="fa-regular fa-trash-can"></i><span data-bind="text: 'Delete ' + picked().length + (picked().length === 1 ? ' file…' : ' files…')"></span></button>
+            <button class="kb sm" data-bind="click: toggleSelectMode"><i class="fa-solid fa-xmark"></i>Done</button>
+          </div>
+          </div>
+          <div class="fm3">
+            <aside>
+              <div class="lbl2">Folders</div>
+              <ul class="folders">
+                <li data-bind="attr: { 'aria-current': fileList() === 'all' && !folder() ? 'true' : null }, click: function() { openList('all', '') }"><i class="fa-regular fa-folder-open"></i>All files<span class="n" data-bind="text: fileCount()"></span></li>
+                <li data-bind="attr: { 'aria-current': fileList() === 'recent' ? 'true' : null }, click: function() { openList('recent', '') }"><i class="fa-regular fa-clock"></i>Printed recently<span class="n" data-bind="text: recentCount() || '—'"></span></li>
+                <li data-bind="attr: { 'aria-current': fileList() === 'failed' ? 'true' : null }, click: function() { openList('failed', '') }"><i class="fa-regular fa-circle-xmark"></i>Failed or cancelled<span class="n" data-bind="text: failedCount() || '—'"></span></li>
+                <!-- ko foreach: folders -->
+                <li data-bind="attr: { 'aria-current': $root.fileList() === 'all' && $root.folder() === $data.path ? 'true' : null }, click: function() { $root.openList('all', $data.path) }"><i class="fa-regular fa-folder"></i><span data-bind="text: $data.path"></span><span class="n" data-bind="text: $data.count"></span></li>
+                <!-- /ko -->
+              </ul>
+              <p class="note" data-bind="visible: !folders().length">No folders yet. New folder, then drag files onto it.</p>
+              <div class="storage">
+                <div class="lbl2" style="margin:0">Storage on the Cubie</div>
+                <div class="kbar" style="margin-top:8px"><i data-bind="style: { width: storagePct() }"></i></div>
+                <div class="sub" style="margin-top:6px" data-bind="html: storageLine()"></div>
+              </div>
+              <p class="note">Files from Orca's Upload arrive here automatically. You can also drop .gcode files anywhere on this screen.</p>
+            </aside>
+            <div class="split">
+              <div>
+                <div class="tiles" data-bind="foreach: tiles">
+                  <div class="tile" data-bind="css: { sel: $root.selectedPath() === $data.path, picked: $root.isPicked($data) }, click: function() { $root.tileClick($data) }, event: { dragstart: $root.dragStart, dragover: $root.dragOverTile, drop: $root.dropOnTile }, attr: { draggable: $data.type === 'folder' ? 'false' : 'true' }">
+                    <!-- ko if: $data.type === 'folder' -->
+                    <div class="folder"><i class="fa-regular fa-folder"></i></div>
+                    <div class="fn" data-bind="text: $data.name"></div><div class="fm" data-bind="text: $data.count + ' files'"></div>
+                    <!-- /ko -->
+                    <!-- ko if: $data.type !== 'folder' -->
+                    <div class="shot">
+                      <!-- ko if: $data.thumb --><img data-bind="attr: { src: $data.thumb, alt: $data.short }" loading="lazy" draggable="false"><!-- /ko -->
+                      <!-- ko ifnot: $data.thumb --><span class="noimg"><i class="fa-regular fa-file-code"></i></span><!-- /ko -->
+                      <span class="chk" data-bind="visible: $root.selectMode()"><i class="fa-solid fa-check" data-bind="visible: $root.isPicked($data)"></i></span>
+                      <button class="kebab" aria-label="File menu" data-bind="visible: !$root.selectMode(), click: function(d, e) { $root.toggleMenu('file:' + $data.path); e.stopPropagation() }, clickBubble: false"><i class="fa-solid fa-ellipsis"></i></button>
+                    </div>
+                    <div class="menu" role="menu" data-bind="visible: $root.openMenu() === 'file:' + $data.path, click: function(d, e) { e.stopPropagation(); return true }">
+                      <button data-bind="enable: $root.canStartAny(), click: function() { $root.printFile($data) }"><i class="fa-solid fa-play"></i>Print</button>
+                      <button data-bind="click: function() { $root.renameFile($data) }"><i class="fa-solid fa-pen"></i>Rename…</button>
+                      <button data-bind="click: function() { $root.moveFiles([$data]) }"><i class="fa-solid fa-folder-open"></i>Move to…</button>
+                      <button data-bind="click: function() { $root.downloadFiles([$data]) }"><i class="fa-solid fa-download"></i>Download</button>
+                      <button class="danger" data-bind="click: function() { $root.deleteFiles([$data]) }"><i class="fa-regular fa-trash-can"></i>Delete…</button>
+                    </div>
+                    <div class="fn" data-bind="text: $data.short, attr: { title: $data.name }"></div>
+                    <div class="fm" data-bind="html: $data.metaLine"></div>
+                    <!-- /ko -->
+                  </div>
+                </div>
+                <p class="empty" data-bind="visible: !tiles().length, text: fileQuery() ? 'No files match “' + fileQuery() + '”.' : (fileList() === 'all' ? 'This folder is empty. Upload a file or drop one here.' : 'Nothing here yet.')"></p>
+              </div>
+              <aside class="detail" data-bind="with: selectedFile">
+                <div class="big">
+                  <!-- ko if: $data.thumb --><img data-bind="attr: { src: $data.thumb, alt: $data.short }"><!-- /ko -->
+                  <!-- ko ifnot: $data.thumb --><span class="noimg" style="position:absolute;inset:0;display:grid;place-items:center;font-size:40px;color:#8a8c92;background:#212023"><i class="fa-regular fa-file-code"></i></span><!-- /ko -->
+                </div>
+                <h3 data-bind="text: $data.short"></h3>
+                <div class="sub" data-bind="html: 'Uploaded <span class=&quot;num&quot;>' + $root.fmtDateTime($data.date) + '</span> · ' + $root.fmtSize($data.size)"></div>
+                <dl class="dl">
+                  <dt>Print time</dt><dd class="num" data-bind="text: $data.printTime ? $root.fmtDur($data.printTime) : '—'"></dd>
+                  <dt>Filament</dt><dd class="num" data-bind="text: $data.filament ? ($data.filament / 1000).toFixed(2) + ' m' : '—'"></dd>
+                  <dt>Layer height</dt><dd class="num" data-bind="text: $data.layer ? $data.layer + ' mm' : '—'"></dd>
+                  <dt>Last print</dt><dd data-bind="html: $data.lastLine"></dd>
+                </dl>
+                <div class="grid2">
+                  <button class="kb primary kspan2" data-bind="enable: $root.canStartAny(), click: function() { $root.printFile($data) }"><i class="fa-solid fa-play"></i>Print now</button>
+                  <button class="kb" data-bind="click: function() { $root.renameFile($data) }"><i class="fa-solid fa-pen"></i>Rename…</button>
+                  <button class="kb" data-bind="click: function() { $root.downloadFiles([$data]) }"><i class="fa-solid fa-download"></i>Download</button>
+                  <button class="kb" data-bind="click: function() { $root.moveFiles([$data]) }"><i class="fa-solid fa-folder-open"></i>Move to…</button>
+                  <button class="kb danger" data-bind="click: function() { $root.deleteFiles([$data]) }"><i class="fa-regular fa-trash-can"></i>Delete…</button>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= MESH ================= -->
+      <section data-bind="visible: route() === 'mesh'" aria-labelledby="kui-h1-mesh">
+        <header class="top"><h1 id="kui-h1-mesh">Bed mesh</h1><span class="finding" data-bind="html: meshFinding()"></span>
+          <div class="right">
+            <button class="kb" data-bind="enable: isOperational(), click: function() { gcode('BED_MESH_PROFILE LOAD=default') }"><i class="fa-solid fa-folder-open"></i>Load saved</button>
+            <button class="kb primary" data-bind="enable: canMachine(), click: meshCalibrate"><i class="fa-solid fa-arrows-rotate"></i>Probe new mesh…</button>
+            <!-- ko template: { name: 'kui-topright' } --><!-- /ko -->
+          </div></header>
+        <div class="view">
+          <div class="statgrid">
+            <div><div class="lab">Spread</div><div class="v" data-bind="html: meshStat('spread')"></div></div>
+            <div><div class="lab">Highest point</div><div class="v" data-bind="html: meshStat('max')"></div></div>
+            <div><div class="lab">Lowest point</div><div class="v" data-bind="html: meshStat('min')"></div></div>
+            <div><div class="lab">Probed</div><div class="v" data-bind="html: meshStat('size')"></div></div>
+          </div>
+          <div class="twocol">
+            <section class="card" style="padding:20px 24px 24px" aria-labelledby="kui-h-heat">
+              <h2 id="kui-h-heat">Height map <span class="seg" style="margin-left:auto" role="group" aria-label="Mesh view">
+                <button data-bind="attr: { 'aria-pressed': meshMode() === 'map' ? 'true' : 'false' }, click: function() { setMeshMode('map') }"><i class="fa-solid fa-table-cells"></i>Map</button>
+                <button data-bind="attr: { 'aria-pressed': meshMode() === '3d' ? 'true' : 'false' }, click: function() { setMeshMode('3d') }"><i class="fa-solid fa-cube"></i>3D surface</button></span></h2>
+              <!-- ko if: meshRows().length -->
+              <div data-bind="visible: meshMode() === 'map'" style="display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:center">
+                <div style="writing-mode:vertical-rl;transform:rotate(180deg);color:var(--muted);font-size:12px;text-align:center">Back → Y</div>
+                <div class="heat" data-bind="style: { gridTemplateColumns: 'repeat(' + meshCols() + ', 1fr)' }, foreach: meshCells"><div data-bind="text: $data.t, style: { background: $data.bg, color: $data.ink }, attr: { title: $data.title }"></div></div>
+              </div>
+              <div id="kui-mesh3d" data-bind="visible: meshMode() === '3d'"></div>
+              <div class="heat-scale"><span class="num" data-bind="text: fmtSigned(meshMin(), 2)"></span><span class="ramp"></span><span class="num" data-bind="text: fmtSigned(meshMax(), 2) + ' mm'"></span></div>
+              <p class="note">Values are offsets from the probe's zero, in mm. The front edge is at the bottom. Klipper corrects all of this automatically while printing.</p>
+              <!-- /ko -->
+              <p class="empty" data-bind="visible: !meshRows().length">No mesh yet. Probe new mesh heats the bed, probes 7×7 points and saves them.</p>
+            </section>
+            <section class="card" aria-labelledby="kui-h-prof">
+              <h2 id="kui-h-prof">Profiles</h2>
+              <ul class="cfg" data-bind="foreach: meshProfiles">
+                <li><span class="n" data-bind="text: $data.name"></span><span class="m" data-bind="text: $data.line"></span><span class="side" data-bind="html: $data.side"></span></li>
+              </ul>
+              <div class="lbl2" style="margin-top:18px">Probe settings</div>
+              <dl class="dl" style="margin-top:0" data-bind="foreach: probeSettings">
+                <dt data-bind="text: $data[0]"></dt><dd class="num" data-bind="text: $data[1]"></dd>
+              </dl>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= KLIPPER ================= -->
+      <section data-bind="visible: route() === 'klipper'" aria-labelledby="kui-h1-klipper">
+        <header class="top"><h1 id="kui-h1-klipper">Klipper</h1><span class="finding" data-bind="html: klipperFinding()"></span>
+          <div class="right">
+            <button class="kb" data-bind="enable: isConnected(), click: hostRestart"><i class="fa-solid fa-rotate"></i>Restart…</button>
+            <button class="kb danger" data-bind="enable: isConnected(), click: firmwareRestart"><i class="fa-solid fa-rotate-right"></i>Firmware restart…</button>
+            <!-- ko template: { name: 'kui-topright' } --><!-- /ko -->
+          </div></header>
+        <div class="view">
+          <div class="statgrid">
+            <div><div class="lab">State</div><div class="v" data-bind="text: klipperStateWord(), style: { color: klipperReady() ? 'var(--pill-positive-ink)' : 'var(--warning)' }"></div></div>
+            <div><div class="lab">Version</div><div class="v" data-bind="html: klipperVersionHtml()"></div></div>
+            <div><div class="lab">Board</div><div class="v" data-bind="html: boardHtml()"></div></div>
+            <div><div class="lab">Host</div><div class="v" data-bind="html: hostHtml()"></div></div>
+          </div>
+          <div class="twocol">
+            <section class="card" style="padding:18px 24px 20px" aria-labelledby="kui-h-msg">
+              <h2 id="kui-h-msg">Messages <span class="aside"><a href="javascript:void(0)" style="text-decoration:underline" data-bind="click: clearMessages">Clear</a> · <a href="javascript:void(0)" style="text-decoration:underline" data-bind="click: copyMessages">Copy</a></span></h2>
+              <div class="logbox"><ul class="log" data-bind="foreach: messages">
+                <li data-bind="css: $data.cls"><span class="ts" data-bind="text: $data.ts"></span><i class="ico fa-solid" data-bind="css: $data.icon"></i><span class="msg" data-bind="text: $data.text"></span></li>
+              </ul></div>
+              <p class="empty" data-bind="visible: !messages().length">No messages since the page opened.</p>
+            </section>
+            <div style="display:grid;gap:24px">
+              <section class="card" aria-labelledby="kui-h-maint">
+                <h2 id="kui-h-maint">Maintenance</h2>
+                <div class="grid2">
+                  <button class="kb sm" data-bind="enable: isOperational(), click: function() { offsetVisible(true) }"><i class="fa-solid fa-arrows-up-down"></i>Z offset…</button>
+                  <button class="kb sm" data-bind="enable: canMachine() && hasKlipperVM(), click: function() { klipperDialog('showLevelingDialog') }"><i class="fa-solid fa-ruler-combined"></i>Bed leveling…</button>
+                  <button class="kb sm" data-bind="enable: canMachine() && hasKlipperVM(), click: function() { klipperDialog('showPidTuningDialog') }"><i class="fa-solid fa-wave-square"></i>PID tuning…</button>
+                  <button class="kb sm" data-bind="enable: isOperational() && hasKlipperVM(), click: function() { klipperDialog('showOffsetDialog') }"><i class="fa-solid fa-location-crosshairs"></i>Offsets…</button>
+                  <button class="kb sm kspan2" data-bind="enable: hasKlipperVM(), click: function() { klipperDialog('showGraphDialog') }"><i class="fa-solid fa-chart-line"></i>Analyse Klipper log…</button>
+                </div>
+              </section>
+              <section class="card" aria-labelledby="kui-h-cfg">
+                <h2 id="kui-h-cfg">Config files <span class="aside">printer_data/config</span></h2>
+                <ul class="cfg" data-bind="foreach: configFiles">
+                  <!-- ko ifnot: $data.folder -->
+                  <li><span class="n" data-bind="text: $data.name"></span><span class="m" data-bind="text: $root.configLine($data)"></span>
+                    <a class="kb sm" data-bind="attr: { href: '?kui=editor&amp;cfg=' + $data.name }, click: function(d, e) { $root.openEditor($data.name); return false }"><i class="fa-solid" data-bind="css: $data.name === 'variables.cfg' ? 'fa-eye' : 'fa-pen'"></i><span data-bind="text: $data.name === 'variables.cfg' ? 'View' : 'Edit'"></span></a></li>
+                  <!-- /ko -->
+                </ul>
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= CONFIG EDITOR ================= -->
+      <section data-bind="visible: route() === 'editor'" aria-labelledby="kui-h1-editor">
+        <header class="top"><h1 id="kui-h1-editor" class="num" data-bind="text: edName()"></h1><span class="finding" data-bind="html: editorFinding()"></span>
+          <div class="right" data-bind="template: { name: 'kui-topright' }"></div></header>
+        <div class="view">
+          <div class="editor">
+            <aside>
+              <div class="lbl2">printer_data/config</div>
+              <ul class="flist" data-bind="foreach: configFiles">
+                <!-- ko ifnot: $data.folder -->
+                <li data-bind="attr: { 'aria-current': $root.edName() === $data.name ? 'true' : null }, click: function() { $root.openEditor($data.name) }">
+                  <i class="fa-regular fa-file-lines"></i><span class="num" data-bind="text: $data.name"></span>
+                  <!-- ko if: $root.edName() === $data.name && $root.edDirty() --><span class="dot" aria-label="Unsaved changes"></span><!-- /ko --><!-- ko ifnot: $root.edName() === $data.name && $root.edDirty() --><span></span><!-- /ko -->
+                  <span class="m" data-bind="text: $root.configShort($data)"></span></li>
+                <!-- /ko -->
+                <!-- ko if: $data.folder -->
+                <li style="cursor:default"><i class="fa-regular fa-folder"></i><span class="num" data-bind="text: $data.name"></span><span class="sub num" data-bind="text: $data.count"></span><span class="m">Old printer-*.cfg backups</span></li>
+                <!-- /ko -->
+              </ul>
+              <div class="lbl2" style="margin-top:20px" data-bind="text: 'History of ' + edName()"></div>
+              <ul class="flist" data-bind="foreach: edHistory().slice(0, 8)">
+                <li style="cursor:default"><i class="fa-solid fa-clock-rotate-left"></i><span data-bind="html: $root.fmtWhen($data.time)"></span><button class="lnk" data-bind="click: function() { $root.compareVersion($data) }">Compare</button><span class="m" data-bind="text: $data.source"></span></li>
+              </ul>
+              <p class="note" data-bind="visible: !edHistory().length">No saved versions yet. Each save here keeps the previous version.</p>
+            </aside>
+            <div class="code">
+              <div class="bar2"><i class="fa-regular fa-file-lines" style="color:var(--muted)"></i><span class="num" data-bind="text: edName()"></span>
+                <span class="dirty" data-bind="visible: edDirty()"><i class="fa-solid fa-circle" style="font-size:6px"></i><span data-bind="html: '<span class=&quot;num&quot;>' + edChangedCount() + '</span> unsaved ' + (edChangedCount() === 1 ? 'change' : 'changes')"></span></span>
+                <span class="spacer"></span>
+                <button class="kb sm" data-bind="click: toggleFind"><i class="fa-solid fa-magnifying-glass"></i>Find</button>
+                <button class="kb sm" data-bind="enable: edDirty(), click: discardEdits"><i class="fa-solid fa-rotate-left"></i>Discard</button>
+                <button class="kb sm" data-bind="enable: edDirty() && !edReadOnly() && !edBusy(), click: function() { saveConfig(false) }"><i class="fa-regular fa-floppy-disk"></i>Save</button>
+                <button class="kb sm primary" data-bind="enable: !edReadOnly() && !edBusy(), click: function() { saveConfig(true) }"><i class="fa-solid fa-rotate"></i><span data-bind="text: edBusy() ? 'Saving…' : 'Save & restart'"></span></button></div>
+              <div class="findbar" data-bind="visible: findOpen()">
+                <label class="layerbox" style="flex:1"><span class="pre">Find</span><input id="kui-find" autocomplete="off" spellcheck="false" data-bind="textInput: findText, event: { keydown: findKey }"></label>
+                <span class="sub" data-bind="text: findInfo()"></span>
+                <button class="kb sm" data-bind="click: findNext"><i class="fa-solid fa-arrow-down"></i>Next</button>
+                <button class="iconbtn sm" aria-label="Close find" data-bind="click: toggleFind"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div class="area">
+                <div class="gutter" id="kui-gutter" data-bind="foreach: edGutter"><span data-bind="text: $data.n, css: { chg: $data.chg }"></span></div>
+                <pre class="hl" id="kui-hl" aria-hidden="true" data-bind="html: edHighlight()"></pre>
+                <textarea id="kui-ed" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Config file contents" data-bind="textInput: edText, attr: { readonly: edReadOnly() }, event: { scroll: edScroll, keyup: edCaret, click: edCaret, keydown: edKey }"></textarea>
+              </div>
+              <div class="foot"><span data-bind="html: edStatusHtml()"></span><span>Line <span class="num" data-bind="text: edLine()"></span>, col <span class="num" data-bind="text: edCol()"></span></span><span style="margin-left:auto">Lines starting #*# are written by SAVE_CONFIG and stay read-only</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ================= CONSOLE DOCK ================= -->
+    <div class="dock" role="region" aria-label="Console">
+      <div class="dgrip" title="Drag to resize the console" data-bind="event: { pointerdown: gripDown }"></div>
+      <button class="dhead" aria-controls="kui-lines" data-bind="click: toggleDock, attr: { 'aria-expanded': dockOpen() ? 'true' : 'false' }">
+        <i class="fa-solid fa-terminal"></i><b>Console</b><span>Last reply:</span><span class="con last" data-bind="text: lastReply().text, css: lastReply().cls"></span>
+        <span style="margin-left:auto"><i class="fa-solid" data-bind="css: dockOpen() ? 'fa-chevron-down' : 'fa-chevron-up'"></i></span>
+      </button>
+      <div class="lines con" id="kui-lines" data-bind="visible: dockOpen(), foreach: consoleView" aria-live="polite">
+        <div><span class="t" data-bind="text: $data.ts"></span><span data-bind="text: $data.text, css: $data.cls"></span></div>
+      </div>
+      <div class="prompt">
+        <span class="kcaret">›</span>
+        <span class="inwrap">
+          <span class="ghost" data-bind="text: cmdGhost()"></span>
+          <input id="kui-cmd" autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="Send a command to the printer" data-bind="textInput: cmdText, event: { keydown: cmdKey, focus: function() { dockOpen(true); return true } }">
+        </span>
+        <span class="hint">Tab completes · <span class="kbd">`</span> toggles</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DIALOGS ================= -->
+  <div class="kmodalwrap" data-bind="visible: popupVisible()" role="dialog" aria-modal="true" aria-labelledby="kui-pop-h">
+    <div class="kmodal">
+      <button class="iconbtn sm kclose" aria-label="Close" data-bind="click: dismissPopup"><i class="fa-solid fa-xmark"></i></button>
+      <h4 id="kui-pop-h"><i class="fa-solid" data-bind="css: popupIsM600() ? 'fa-arrows-rotate' : 'fa-pause'"></i><span data-bind="text: popupTitle()"></span></h4>
+      <p><i class="fa-solid fa-square-parking"></i> Paused and parked · <i class="fa-solid fa-fire"></i> <span data-bind="text: 'holding ' + Math.round(pauseTemp()) + ' °C'"></span></p>
+      <div class="steps" data-bind="visible: popupIsM600()">
+        <span><i class="fa-solid fa-arrow-up-long"></i>Unload</span><i class="fa-solid fa-chevron-right"></i>
+        <span><i class="fa-solid fa-hand-holding"></i>Insert</span><i class="fa-solid fa-chevron-right"></i>
+        <span><i class="fa-solid fa-arrow-down-long"></i>Load</span><i class="fa-solid fa-chevron-right"></i>
+        <span><i class="fa-solid fa-play"></i>Resume</span>
+      </div>
+      <div class="foot">
+        <button class="kb" data-bind="visible: popupIsM600(), click: function() { gcode('UNLOAD_FILAMENT') }"><i class="fa-solid fa-arrow-up-long"></i>Unload</button>
+        <button class="kb" data-bind="visible: popupIsM600(), click: function() { gcode('LOAD_FILAMENT') }"><i class="fa-solid fa-arrow-down-long"></i>Load</button>
+        <button class="kb" data-bind="click: function() { gcode('PURGE_FILAMENT LENGTH=10') }"><i class="fa-solid fa-droplet"></i>Purge more</button>
+        <button class="kb primary" data-bind="click: resumePrint"><i class="fa-solid fa-play"></i>Resume</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="kmodalwrap" data-bind="visible: confirmVisible()" role="dialog" aria-modal="true" aria-labelledby="kui-conf-h">
+    <div class="kmodal">
+      <h4 id="kui-conf-h"><i class="fa-solid fa-triangle-exclamation"></i><span data-bind="text: confirmTitle()"></span></h4>
+      <p data-bind="text: confirmText()"></p>
+      <div class="foot">
+        <button class="kb" data-bind="click: confirmNo"><i class="fa-solid fa-xmark"></i>Back</button>
+        <button class="kb" data-bind="css: confirmDanger() ? 'danger' : 'primary', click: confirmYes"><i class="fa-solid fa-check"></i><span data-bind="text: confirmButton()"></span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="kmodalwrap" data-bind="visible: promptVisible()" role="dialog" aria-modal="true" aria-labelledby="kui-prompt-h">
+    <form class="kmodal" data-bind="submit: promptYes">
+      <h4 id="kui-prompt-h"><i class="fa-solid" data-bind="css: promptIcon()"></i><span data-bind="text: promptTitle()"></span></h4>
+      <div class="field">
+        <label for="kui-prompt-in" data-bind="text: promptLabel()"></label>
+        <!-- ko if: promptOptions().length -->
+        <select id="kui-prompt-sel" data-bind="options: promptOptions, optionsText: 'label', optionsValue: 'value', value: promptValue"></select>
+        <!-- /ko -->
+        <!-- ko ifnot: promptOptions().length -->
+        <input id="kui-prompt-in" autocomplete="off" spellcheck="false" data-bind="textInput: promptValue">
+        <!-- /ko -->
+      </div>
+      <div class="foot">
+        <button type="button" class="kb" data-bind="click: promptNo"><i class="fa-solid fa-xmark"></i>Back</button>
+        <button type="submit" class="kb primary"><i class="fa-solid fa-check"></i><span data-bind="text: promptButton()"></span></button>
+      </div>
+    </form>
+  </div>
+
+  <div class="kmodalwrap" data-bind="visible: offsetVisible()" role="dialog" aria-modal="true" aria-labelledby="kui-off-h">
+    <div class="kmodal">
+      <button class="iconbtn sm kclose" aria-label="Close" data-bind="click: function() { offsetVisible(false) }"><i class="fa-solid fa-xmark"></i></button>
+      <h4 id="kui-off-h"><i class="fa-solid fa-arrows-up-down"></i>Z offset</h4>
+      <p>Current offset <b class="num" data-bind="text: fmtSigned(zOffset(), 3) + ' mm'"></b>. Lower brings the nozzle closer to the bed.</p>
+      <div class="grid4" style="margin-top:14px">
+        <button class="kb sm" data-bind="click: function() { adjustZ(-0.05) }"><i class="fa-solid fa-angles-down"></i><span class="num">.05</span></button>
+        <button class="kb sm" data-bind="click: function() { adjustZ(-0.01) }"><i class="fa-solid fa-angle-down"></i><span class="num">.01</span></button>
+        <button class="kb sm" data-bind="click: function() { adjustZ(0.01) }"><i class="fa-solid fa-angle-up"></i><span class="num">.01</span></button>
+        <button class="kb sm" data-bind="click: function() { adjustZ(0.05) }"><i class="fa-solid fa-angles-up"></i><span class="num">.05</span></button>
+      </div>
+      <div class="foot"><button class="kb" data-bind="click: resetZ"><i class="fa-solid fa-rotate-left"></i>Reset to 0</button><button class="kb primary" data-bind="click: function() { offsetVisible(false) }"><i class="fa-solid fa-check"></i>Done</button></div>
+    </div>
+  </div>
+
+  <div class="kmodalwrap" data-bind="visible: diffVisible()" role="dialog" aria-modal="true" aria-labelledby="kui-diff-h">
+    <div class="kmodal wide">
+      <button class="iconbtn sm kclose" aria-label="Close" data-bind="click: function() { diffVisible(false) }"><i class="fa-solid fa-xmark"></i></button>
+      <h4 id="kui-diff-h"><i class="fa-solid fa-clock-rotate-left"></i><span data-bind="text: diffTitle()"></span></h4>
+      <p class="sub">Red lines are only in the saved version, green lines only in the editor now.</p>
+      <div class="diff" data-bind="foreach: diffLines"><div data-bind="text: $data.t, css: $data.c"></div></div>
+      <div class="foot"><button class="kb" data-bind="click: function() { diffVisible(false) }"><i class="fa-solid fa-xmark"></i>Close</button><button class="kb primary" data-bind="click: restoreVersion"><i class="fa-solid fa-rotate-left"></i>Put this version in the editor</button></div>
+    </div>
+  </div>
+
+  <button class="totop" type="button" data-bind="visible: showTop(), click: scrollTop"><i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  <div class="dropzone" data-bind="visible: dropping()"><span><i class="fa-solid fa-upload"></i> Drop .gcode files to upload</span></div>
+  <div class="toast" role="status" aria-live="polite" data-bind="visible: toastText(), css: toastKind()"><i class="fa-solid" data-bind="css: toastKind() === 'bad' ? 'fa-circle-exclamation' : (toastKind() === 'good' ? 'fa-circle-check' : 'fa-circle-info')"></i><span data-bind="text: toastText()"></span></div>
+</div>
