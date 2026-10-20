@@ -5,6 +5,8 @@
     <button class="iconbtn" aria-label="Account" data-bind="click: function() { toggleMenu('account') }, attr: { 'aria-expanded': openMenu() === 'account' }"><i class="fa-regular fa-user"></i></button>
     <div class="menu" role="menu" data-bind="visible: openMenu() === 'account'">
       <div class="who" data-bind="text: 'Signed in as ' + userName()"></div>
+      <button data-bind="click: toggleNotify"><i class="fa-solid" data-bind="css: notifyOn() ? 'fa-bell' : 'fa-bell-slash'"></i><span data-bind="text: notifyLabel()"></span></button>
+      <button data-bind="click: function() { openMenu(null); keysVisible(true) }"><i class="fa-regular fa-keyboard"></i>Keyboard shortcuts<span class="kbd" style="margin-left:auto">?</span></button>
       <button data-bind="click: classicUi"><i class="fa-solid fa-table-columns"></i>Classic OctoPrint</button>
       <button data-bind="click: openSettings"><i class="fa-solid fa-gear"></i>OctoPrint settings</button>
       <button data-bind="click: logout"><i class="fa-solid fa-arrow-right-from-bracket"></i>Log out</button>
@@ -22,7 +24,7 @@
   <button class="estop" aria-label="Emergency stop: halts the printer immediately" data-bind="click: emergencyStop"><i class="fa-solid fa-hand"></i><span class="lbl">Emergency stop</span></button>
 </script>
 
-<div id="kui" data-bind="event: { keydown: onKeyDown }">
+<div id="kui">
   <div class="app">
     <nav class="rail" aria-label="Main">
       <div class="mark" aria-hidden="true">K2</div>
@@ -63,6 +65,29 @@
               <div class="v" id="kui-v-2d" data-bind="visible: viewMode() === '2d'">
                 <div class="v-empty" data-bind="visible: !has2d()"><i class="fa-regular fa-square"></i>OctoPrint's GCode Viewer is turned off</div>
               </div>
+              <div class="objs pop" data-bind="visible: objects().length">
+                <button class="kb sm" data-bind="click: function() { toggleMenu('objects') }, attr: { 'aria-expanded': openMenu() === 'objects' }"><i class="fa-solid fa-shapes"></i><span data-bind="text: 'Objects ' + objectsActive() + '/' + objects().length"></span></button>
+                <div class="menu objmenu" role="menu" data-bind="visible: openMenu() === 'objects'">
+                  <div class="who">Skip an object to stop printing it. The rest carry on.</div>
+                  <!-- ko foreach: objects -->
+                  <div class="objrow" data-bind="css: { skipped: $data.skipped, cur: $data.current }">
+                    <i class="fa-solid" data-bind="css: $data.skipped ? 'fa-ban' : ($data.current ? 'fa-play' : 'fa-cube')"></i>
+                    <span class="on" data-bind="text: $data.label, attr: { title: $data.name }"></span>
+                    <button class="kb sm danger" data-bind="visible: !$data.skipped, enable: $root.isPrinting() || $root.isPaused(), click: function() { $root.skipObject($data) }"><i class="fa-solid fa-ban"></i>Skip…</button>
+                    <span class="sub" data-bind="visible: $data.skipped">Skipped</span>
+                  </div>
+                  <!-- /ko -->
+                </div>
+              </div>
+              <svg class="objmap" viewBox="0 0 220 220" aria-label="Objects on the bed" data-bind="visible: viewMode() === '2d' && objects().length">
+                <rect x="0" y="0" width="220" height="220" rx="3"></rect>
+                <!-- ko foreach: objects -->
+                <g data-bind="css: { skipped: $data.skipped, cur: $data.current }, click: function() { if (!$data.skipped) $root.skipObject($data) }">
+                  <title data-bind="text: $data.label + ($data.skipped ? ' (skipped)' : ', click to skip')"></title>
+                  <polygon data-bind="attr: { points: $data.points }"></polygon>
+                </g>
+                <!-- /ko -->
+              </svg>
               <div class="hud" data-bind="visible: viewMode() !== 'webcam' && layerTotal() > 0 && (isPrinting() || isPaused())">Following layer <span class="num" data-bind="text: layerCurrent()"></span> · Z <span class="num" data-bind="text: zNow()"></span> mm</div>
             </div>
             <div class="track">
@@ -70,10 +95,18 @@
                 <span data-bind="text: layerTotal() > 0 ? 'Layers. Click one to pause there.' : 'Layers appear here while a print runs.'"></span>
                 <span data-bind="html: armedTrackText()"></span>
               </div>
-              <div class="layers" aria-label="Layer track" data-bind="foreach: layerCells, css: { off: !(isPrinting() || isPaused()) }">
-                <button data-bind="css: $data.cls, attr: { title: $data.title, 'aria-label': $data.title }, click: function() { $root.pauseAtLayerClick($data.layer) }"></button>
+              <div class="layerwrap">
+                <div class="laytip" aria-hidden="true" id="kui-laytip"></div>
+                <div class="layers" id="kui-layers" aria-label="Layer track" data-bind="foreach: layerCells, css: { off: !(isPrinting() || isPaused()) }, event: { mousemove: trackMove, mouseleave: trackLeave }">
+                  <button data-bind="css: $data.cls, attr: { 'aria-label': $data.title, 'data-layer': $data.layer }, click: function() { $root.pauseAtLayerClick($data.layer) }"></button>
+                </div>
               </div>
               <div class="track-foot" data-bind="foreach: layerTicks"><span class="num" data-bind="text: $data"></span></div>
+              <div class="laylegend" data-bind="visible: layerTotal() > 0">
+                <span><i class="sw done"></i>Printed</span><span><i class="sw now"></i>Now</span>
+                <span><i class="sw pause"></i>Pause</span><span><i class="sw m600"></i>Filament change</span>
+                <span data-bind="visible: pauseHistory().length"><i class="sw was"></i>Paused earlier</span>
+              </div>
             </div>
           </section>
 
@@ -92,9 +125,10 @@
             <!-- ko if: isPrinting() || isPaused() -->
             <div class="klead"><span class="big num" data-bind="text: progress().toFixed(1) + '%'"></span><span class="sub" data-bind="html: layerTotal() > 0 ? 'layer <span class=&quot;num&quot;>' + layerCurrent() + '</span> of <span class=&quot;num&quot;>' + layerTotal() + '</span>' : 'by file position'"></span></div>
             <div class="kbar"><i data-bind="style: { width: progress() + '%' }"></i></div>
-            <div class="meta">
-              <div>Elapsed<span class="num" data-bind="text: fmtDur(printTime())"></span></div>
-              <div>Left<span class="num" data-bind="text: fmtDur(timeLeft())"></span></div>
+            <div class="meta meta4">
+              <div>Elapsed<span class="num" data-bind="text: fmtDurS(printTime())"></span></div>
+              <div>Left<span class="num" data-bind="text: fmtDurS(timeLeft())"></span></div>
+              <div data-bind="attr: { title: lastLayerSecs() ? 'Last layer took ' + fmtDurS(lastLayerSecs()) : 'Time on the current layer' }">Layer<span class="num" data-bind="text: layerTime() !== null ? fmtDurS(layerTime()).replace(/^0:/, '') : '—'"></span></div>
               <div>Done at<span class="num" data-bind="text: finishClock()"></span></div>
             </div>
             <!-- /ko -->
@@ -132,10 +166,11 @@
             <h2 id="kui-h-recent">Recent files <a class="aside" href="?kui=files" data-bind="click: nav">All <span class="num" data-bind="text: fileCount()"></span> files</a></h2>
             <ul class="gallery" data-bind="foreach: recentFiles">
               <li>
-                <div class="shot">
+                <div class="shot clickable" role="button" tabindex="0" data-bind="click: function() { $root.previewFile($data) }, event: { keydown: function(d, e) { if (e.key === 'Enter') $root.previewFile($data); return true } }, attr: { title: 'Load ' + $data.short + ' and preview it' }">
                   <!-- ko if: $data.thumb --><img data-bind="attr: { src: $data.thumb, alt: $data.short }" loading="lazy"><!-- /ko -->
                   <!-- ko ifnot: $data.thumb --><span class="noimg"><i class="fa-regular fa-file-code"></i></span><!-- /ko -->
-                  <button class="kb sm" data-bind="enable: $root.canStartAny(), click: function() { $root.printFile($data) }"><i class="fa-solid fa-play"></i>Print</button>
+                  <span class="peek"><i class="fa-solid fa-eye"></i>Preview</span>
+                  <button class="kb sm" data-bind="enable: $root.canStartAny(), click: function(d, e) { $root.printFile($data); e.stopPropagation() }, clickBubble: false"><i class="fa-solid fa-play"></i>Print</button>
                 </div>
                 <div class="fn" data-bind="text: $data.short, attr: { title: $data.name }"></div>
                 <div class="fm" data-bind="html: $data.metaLine"></div>
@@ -278,10 +313,12 @@
                       <!-- ko if: $data.thumb --><img data-bind="attr: { src: $data.thumb, alt: $data.short }" loading="lazy" draggable="false"><!-- /ko -->
                       <!-- ko ifnot: $data.thumb --><span class="noimg"><i class="fa-regular fa-file-code"></i></span><!-- /ko -->
                       <span class="chk" data-bind="visible: $root.selectMode()"><i class="fa-solid fa-check" data-bind="visible: $root.isPicked($data)"></i></span>
+                      <button class="peekbtn kb sm" aria-label="Load and preview" data-bind="visible: !$root.selectMode(), click: function(d, e) { $root.previewFile($data); e.stopPropagation() }, clickBubble: false"><i class="fa-solid fa-eye"></i>Preview</button>
                       <button class="kebab" aria-label="File menu" data-bind="visible: !$root.selectMode(), click: function(d, e) { $root.toggleMenu('file:' + $data.path); e.stopPropagation() }, clickBubble: false"><i class="fa-solid fa-ellipsis"></i></button>
                     </div>
                     <div class="menu" role="menu" data-bind="visible: $root.openMenu() === 'file:' + $data.path, click: function(d, e) { e.stopPropagation(); return true }">
                       <button data-bind="enable: $root.canStartAny(), click: function() { $root.printFile($data) }"><i class="fa-solid fa-play"></i>Print</button>
+                      <button data-bind="enable: $root.canStartAny(), click: function() { $root.previewFile($data) }"><i class="fa-solid fa-eye"></i>Load &amp; preview</button>
                       <button data-bind="click: function() { $root.renameFile($data) }"><i class="fa-solid fa-pen"></i>Rename…</button>
                       <button data-bind="click: function() { $root.moveFiles([$data]) }"><i class="fa-solid fa-folder-open"></i>Move to…</button>
                       <button data-bind="click: function() { $root.downloadFiles([$data]) }"><i class="fa-solid fa-download"></i>Download</button>
@@ -308,7 +345,8 @@
                   <dt>Last print</dt><dd data-bind="html: $data.lastLine"></dd>
                 </dl>
                 <div class="grid2">
-                  <button class="kb primary kspan2" data-bind="enable: $root.canStartAny(), click: function() { $root.printFile($data) }"><i class="fa-solid fa-play"></i>Print now</button>
+                  <button class="kb primary" data-bind="enable: $root.canStartAny(), click: function() { $root.printFile($data) }"><i class="fa-solid fa-play"></i>Print now</button>
+                  <button class="kb" data-bind="enable: $root.canStartAny(), click: function() { $root.previewFile($data) }"><i class="fa-solid fa-eye"></i>Preview</button>
                   <button class="kb" data-bind="click: function() { $root.renameFile($data) }"><i class="fa-solid fa-pen"></i>Rename…</button>
                   <button class="kb" data-bind="click: function() { $root.downloadFiles([$data]) }"><i class="fa-solid fa-download"></i>Download</button>
                   <button class="kb" data-bind="click: function() { $root.moveFiles([$data]) }"><i class="fa-solid fa-folder-open"></i>Move to…</button>
@@ -548,6 +586,19 @@
         <button class="kb sm" data-bind="click: function() { adjustZ(0.05) }"><i class="fa-solid fa-angles-up"></i><span class="num">.05</span></button>
       </div>
       <div class="foot"><button class="kb" data-bind="click: resetZ"><i class="fa-solid fa-rotate-left"></i>Reset to 0</button><button class="kb primary" data-bind="click: function() { offsetVisible(false) }"><i class="fa-solid fa-check"></i>Done</button></div>
+    </div>
+  </div>
+
+  <div class="kmodalwrap" data-bind="visible: keysVisible()" role="dialog" aria-modal="true" aria-labelledby="kui-keys-h">
+    <div class="kmodal wide">
+      <button class="iconbtn sm kclose" aria-label="Close" data-bind="click: function() { keysVisible(false) }"><i class="fa-solid fa-xmark"></i></button>
+      <h4 id="kui-keys-h"><i class="fa-regular fa-keyboard"></i>Keyboard shortcuts</h4>
+      <div class="keys" data-bind="foreach: shortcutGroups">
+        <div class="kgroup"><div class="lbl2" data-bind="text: $data.title"></div>
+          <!-- ko foreach: $data.keys --><div class="krow2"><span data-bind="foreach: $data.k"><span class="kbd" data-bind="text: $data"></span></span><span data-bind="text: $data.d"></span></div><!-- /ko -->
+        </div>
+      </div>
+      <p class="note">Shortcuts don't fire while you type in a text field, except Esc and the editor's Ctrl shortcuts.</p>
     </div>
   </div>
 

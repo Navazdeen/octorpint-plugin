@@ -209,32 +209,84 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui #kui-webcam { max-width: 100%; max-height: 100%; object-fit: contain; }
 #kui #kui-v-3d #pg-container { position: absolute; inset: 0; width: 100% !important; height: 100% !important; margin: 0; }
 #kui #kui-v-3d #pg-container .pg-view { height: 100% !important; }
-/* the 2D viewer keeps its own layout and is scaled to fit the pane (JS sets --s2d) */
+/* the 2D viewer keeps its own markup; fit2d() sizes its canvas and sliders to the pane */
 #kui #kui-v-2d { overflow: hidden; }
+/* the Cancelobject plugin injects its own bar and overlay next to the 2D canvas; in this UI objects are
+   skipped with Klipper's EXCLUDE_OBJECT (the Objects menu), so hide them here (classic UI keeps them) */
+#kui #kui-v-2d #gcode_cancel_controls, #kui #kui-v-2d #gcode_canvas_cancel_overlay { display: none !important; }
 /* the 2D renderer paints a fixed white bed; invert + hue-rotate turns it dark and keeps line hues */
 #kui #kui-v-2d #gcode_canvas { filter: invert(.94) hue-rotate(180deg); border-radius: 2px; }
-#kui #kui-v-2d #canvas_container { position: absolute; left: 50%; top: 50%; width: 600px; transform-origin: center; transform: translate(-50%, -50%) scale(var(--s2d, 1)); margin: 0; outline: 0; }
+/* the canvas is resized to fill the pane (JS), the layer slider runs down its right edge, the segment slider under it */
+#kui #kui-v-2d #canvas_container { position: absolute; left: 10px; top: 10px; margin: 0; outline: 0; }
 /* OctoPrint scopes these to its #gcode tab; re-created here because the viewer moved */
 #kui #kui-v-2d #gcode_layer_slider, #kui #kui-v-2d #canvas_container > .slider-vertical { position: absolute; right: 0; top: 0; height: 568px; float: right; margin: 0; }
 #kui #kui-v-2d #gcode_layer_slider .slider-handle, #kui #kui-v-2d .slider-vertical .slider-handle { width: 14px; height: 14px; margin-left: -3px; margin-top: -7px; }
 #kui #kui-v-2d #gcode_command_slider .slider-handle, #kui #kui-v-2d .slider-horizontal .slider-handle { width: 14px; height: 14px; margin-left: -7px; margin-top: -3px; }
-#kui #kui-v-2d .slider-horizontal { width: 568px !important; margin-top: 10px; }
+#kui #kui-v-2d .slider-horizontal { margin-top: 10px; }
 #kui #kui-v-2d .slider .slider-track { background: #2a2930; background-image: none; box-shadow: none; border-radius: 4px; }
 #kui #kui-v-2d .slider .slider-selection { background: var(--accent); background-image: none; box-shadow: none; }
 #kui #kui-v-2d .slider .slider-handle { background: #fff; background-image: none; box-shadow: 0 0 0 3px rgba(0,0,0,.35); border: 0; opacity: 1; }
 #kui #kui-v-2d .tooltip-inner { background: var(--raised); color: #fff; font: 12px var(--mono); }
+#kui .objs { position: absolute; right: 44px; bottom: 44px; z-index: 6; }
+#kui .objs .menu { top: auto; bottom: 40px; }
+#kui .objs > .kb { background: rgba(19,18,23,.85); }
+#kui .objmenu { min-width: 320px; max-height: 340px; overflow-y: auto; }
+#kui .objrow { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 4px; }
+#kui .objrow i { color: var(--muted); }
+#kui .objrow .on { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#kui .objrow.cur i { color: var(--accent); }
+#kui .objrow.skipped .on { color: var(--muted); text-decoration: line-through; }
+#kui .objmap { position: absolute; right: 44px; top: 12px; width: 96px; height: 96px; z-index: 5; }
+#kui .objmap rect { fill: rgba(19,18,23,.88); stroke: #3a3a3e; stroke-width: 1; }
+#kui .objmap g { cursor: pointer; }
+#kui .objmap polygon { fill: rgba(232,121,47,.25); stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+#kui .objmap g.cur polygon { fill: rgba(232,121,47,.6); }
+#kui .objmap g.skipped polygon { fill: none; stroke: #55545c; stroke-dasharray: 3 2; }
+#kui .objmap g:hover polygon { stroke: #fff; }
+#kui .shot.clickable { cursor: pointer; }
+#kui .shot .peek { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); height: 30px; padding: 0 12px; border-radius: 999px; background: #111; color: #fff; font-size: 12px; display: inline-flex; gap: 7px; align-items: center; opacity: 0; transition: opacity .15s; pointer-events: none; }
+#kui .shot.clickable:hover .peek, #kui .shot.clickable:focus-visible .peek { opacity: 1; }
+#kui .tile .peekbtn { position: absolute; left: 8px; bottom: 8px; background: #111; border-color: #111; color: #fff; opacity: 0; transition: opacity .15s; }
+#kui .tile .peekbtn i { color: #fff; }
+#kui .tile:hover .peekbtn, #kui .tile .peekbtn:focus-visible { opacity: 1; }
+#kui .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px 28px; margin-top: 12px; }
+#kui .krow2 { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 13px; color: #d6d7da; }
+#kui .krow2 > span:first-child { display: inline-flex; gap: 4px; flex: none; }
+/* PrettyGCode's segment-slider tooltip renders as a slider-sized box over its own slider: hide it (the
+   segment count adds little); its layer slider's "Z" label sits beside the slider and stays */
+#kui #pg-segment-slider-ui .tooltip { display: none !important; }
+/* the 2D viewer's slider tooltips as a small label above / beside the handle */
+#kui #kui-v-2d .slider .tooltip { width: auto !important; height: auto !important; margin: 0 !important; pointer-events: none; white-space: nowrap; padding: 0 !important; }
+#kui #kui-v-2d .slider-horizontal .tooltip { top: auto !important; bottom: calc(100% + 8px) !important; transform: translateX(-50%); }
+#kui #kui-v-2d .slider-vertical .tooltip { transform: translate(-100%, -50%); margin-left: -10px !important; }
+#kui .pane .slider .tooltip-inner { background: var(--raised); color: #fff; font: 12px/18px var(--mono); padding: 3px 9px; border-radius: 999px; max-width: none; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+#kui .pane .slider .tooltip-arrow { display: none; }
 #kui .pane .hud { position: absolute; left: 14px; top: 12px; font-size: 12px; color: var(--muted); z-index: 4; pointer-events: none; }
 #kui .pane .hud .num { color: var(--text); }
 #kui .track { margin-top: 16px; }
 #kui .track-head { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 #kui .track-head b { color: var(--text); font-weight: 500; }
-#kui .layers { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: 30px; align-items: end; }
-#kui .layers button { height: 18px; background: #2a2930; border-radius: 1px; border: 0; padding: 0; cursor: pointer; min-width: 0; }
+#kui .layerwrap { position: relative; }
+#kui .layers { display: flex; gap: 1px; height: 44px; align-items: flex-end; }
+#kui .layers button { flex: 1 1 0; min-width: 0; height: 18px; background: #2a2930; border-radius: 1px; border: 0; padding: 0; cursor: pointer; transform-origin: bottom; }
 #kui .layers button.done { background: var(--accent); }
 #kui .layers button.now { height: 30px; background: #fff; }
-#kui .layers button.pause { background: transparent; box-shadow: inset 0 0 0 1px #fff; height: 30px; }
-#kui .layers button:hover { background: #55545c; }
+#kui .layers button.pause { height: 30px; background: #4a8ad6; }
+#kui .layers button.m600 { height: 30px; background: var(--warning); }
+#kui .layers button.was-pause { box-shadow: inset 0 3px 0 #7fa9de; }
+#kui .layers button.was-m600 { box-shadow: inset 0 3px 0 #f0c86e; }
+#kui .layers button.hot { filter: brightness(1.35); }
 #kui .layers.off button { cursor: default; }
+#kui .laytip { position: absolute; bottom: 50px; transform: translateX(-50%); white-space: nowrap; background: var(--raised); color: #fff; font-size: 12px; padding: 4px 10px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.45); pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 3; }
+#kui .laytip.show { opacity: 1; }
+#kui .laytip .num { color: var(--accent-ink); }
+#kui .laylegend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 11px; color: var(--muted); }
+#kui .laylegend span { display: inline-flex; gap: 6px; align-items: center; }
+#kui .laylegend .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; background: #2a2930; }
+#kui .laylegend .sw.done { background: var(--accent); } #kui .laylegend .sw.now { background: #fff; }
+#kui .laylegend .sw.pause { background: #4a8ad6; } #kui .laylegend .sw.m600 { background: var(--warning); }
+#kui .laylegend .sw.was { background: #2a2930; box-shadow: inset 0 3px 0 #7fa9de; }
+@media (prefers-reduced-motion: reduce) { #kui .laytip { transition: none; } }
 #kui .track-foot { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; }
 
 /* ---------- figures ---------- */
@@ -243,6 +295,8 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 16px; }
 #kui .meta div { color: var(--muted); font-size: 12px; }
 #kui .meta .num { display: block; color: var(--text); font-size: 15px; line-height: 22px; }
+#kui .meta.meta4 { grid-template-columns: 1.15fr 1.15fr 0.85fr 0.85fr; gap: 6px; }
+#kui .meta.meta4 .num { font-size: 14px; white-space: nowrap; }
 #kui .kbar { height: 4px; border-radius: 4px; background: #2a2930; overflow: hidden; margin-top: 12px; }
 #kui .kbar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
 #kui .job { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; min-width: 0; }

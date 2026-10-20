@@ -62,7 +62,11 @@ $(function () {
         self.filePath = ko.observable("");
         self.fileOrigin = ko.observable("local");
         self.now = ko.observable(Date.now());
-        setInterval(function () { self.now(Date.now()); }, 15000);
+        var lastTick = 0;
+        setInterval(function () {
+            var t = Date.now(), busy = self.isPrinting && (self.isPrinting() || self.isPaused());
+            if (busy || t - lastTick >= 15000) { lastTick = t; self.now(t); }
+        }, 1000);
 
         self.isConnected = ko.pureComputed(function () { var f = self.flags(); return !!(f.operational || f.printing || f.paused); });
         self.isPrinting = ko.pureComputed(function () { var f = self.flags(); return !!(f.printing || f.resuming || f.finishing); });
@@ -79,9 +83,24 @@ $(function () {
         function k(obj, key, dflt) { var o = self.kstat()[obj]; return o && o[key] !== undefined && o[key] !== null ? o[key] : dflt; }
         self.klipperState = ko.pureComputed(function () { return self.kconnected() ? k("webhooks", "state", "startup") : "offline"; });
         self.klipperReady = ko.pureComputed(function () { return self.klipperState() === "ready"; });
+        self.klipperState.subscribe(function (st) {
+            if (st === "shutdown" || st === "error") self.notify("Klipper " + st, k("webhooks", "state_message", "The printer stopped."), "kui-klipper");
+        });
         self.isOperational = ko.pureComputed(function () { return self.isConnected() && self.klipperReady(); });
         self.layerCurrent = ko.pureComputed(function () { return (k("print_stats", "info", {}) || {}).current_layer || 0; });
         self.layerTotal = ko.pureComputed(function () { return (k("print_stats", "info", {}) || {}).total_layer || 0; });
+        self.layerStarted = ko.observable(null);
+        self.lastLayerSecs = ko.observable(null);
+        self.layerCurrent.subscribe(function (n) {
+            var t = Date.now();
+            if (self.layerStarted() && n > 1) self.lastLayerSecs((t - self.layerStarted()) / 1000);
+            self.layerStarted(n > 0 ? t : null);
+            if (!n) self.lastLayerSecs(null);
+        });
+        self.layerTime = ko.pureComputed(function () {
+            var st = self.layerStarted();
+            return st ? (self.now() - st) / 1000 : null;
+        });
         self.kPaused = ko.pureComputed(function () { return !!k("pause_resume", "is_paused", false); });
         self.pauseReason = ko.pureComputed(function () { return k("gcode_macro PAUSE", "reason", "none"); });
         self.pauseTemp = ko.pureComputed(function () { return k("gcode_macro PAUSE", "extruder_temp", 0) || self.toolTarget(); });
@@ -115,6 +134,11 @@ $(function () {
             if (s === null || s === undefined || isNaN(s)) return "—";
             var m = Math.round(s / 60);
             return Math.floor(m / 60) + ":" + pad2(m % 60);
+        };
+        self.fmtDurS = function (s) {
+            if (s === null || s === undefined || isNaN(s)) return "—";
+            s = Math.max(0, Math.round(s));
+            return Math.floor(s / 3600) + ":" + pad2(Math.floor(s % 3600 / 60)) + ":" + pad2(s % 60);
         };
         self.fmtSigned = function (v, d) { v = Number(v) || 0; return (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d); };
         self.fmtSize = function (b) {
@@ -214,20 +238,99 @@ $(function () {
             if (!a) return "";
             return (a.kind === "Pause" ? "Pauses" : "Filament change") + " at layer " + bnum(a.layer);
         });
+        // pauses that already happened in this print, for the colour-coded track
+        self.pauseHistory = ko.observableArray([]);
+        self.kPaused.subscribe(function (p) {
+            if (p && self.layerCurrent() > 0) self.pauseHistory.push({ layer: self.layerCurrent(), kind: self.pauseReason() === "m600" ? "m600" : "pause" });
+        });
+        self.layerTotal.subscribe(function () { self.pauseHistory([]); });
+        self.layerInfo = function (i) {
+            var cur = self.layerCurrent(), a = self.armed(), past = self.pauseHistory().filter(function (h) { return h.layer === i; })[0];
+            var bits = [];
+            if (i === cur) bits.push("printing now");
+            else if (i < cur) bits.push("printed");
+            if (a && a.layer === i) bits.push((a.kind === "Pause" ? "pause" : "filament change") + " armed");
+            if (past) bits.push(past.kind === "m600" ? "filament changed here" : "paused here");
+            if (i > cur && !(a && a.layer === i) && (self.isPrinting() || self.isPaused())) bits.push("click to " + (self.pauseMacro() === "M600" ? "change filament" : "pause") + " here");
+            return bits;
+        };
         self.layerCells = ko.pureComputed(function () {
             var tot = self.layerTotal(), cur = self.layerCurrent(), a = self.armed(), out = [];
+            var past = {}; self.pauseHistory().forEach(function (h) { past[h.layer] = h.kind; });
             for (var i = 1; i <= tot; i++) {
-                var cls = i < cur ? "done" : (i === cur ? "now" : (a && a.layer === i ? "pause" : ""));
-                out.push({ layer: i, cls: cls, title: "Layer " + i + (i > cur ? ", click to pause here" : "") });
+                var cls = i < cur ? "done" : (i === cur ? "now" : "");
+                if (a && a.layer === i && i >= cur) cls = a.kind === "Pause" ? "pause" : "m600";
+                if (past[i]) cls += " was-" + past[i];
+                out.push({ layer: i, cls: cls, title: "Layer " + i + ", " + self.layerInfo(i).join(", ") });
             }
             return out;
         });
+        // dock-style magnifier: bars near the cursor grow wider and taller
+        var trackFrame = null, trackX = 0;
+        function magnify() {
+            trackFrame = null;
+            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
+            if (!el || !el.children.length) return;
+            var bars = el.children, rect = el.getBoundingClientRect(), n = bars.length;
+            var pos = Math.max(0, Math.min(n - 1, (trackX - rect.left) / rect.width * n));
+            var sigma = Math.max(2.5, Math.min(7, n / 30)), hotIdx = Math.round(pos - 0.5);
+            for (var i = 0; i < n; i++) {
+                var d = (i + 0.5 - pos) / sigma, g = Math.exp(-d * d / 2);
+                bars[i].style.flexGrow = (1 + 5 * g).toFixed(3);
+                bars[i].style.transform = "scaleY(" + (1 + 0.55 * g).toFixed(3) + ")";
+                bars[i].classList.toggle("hot", i === hotIdx);
+            }
+            var layer = Math.max(1, Math.min(n, hotIdx + 1)), info = self.layerInfo(layer);
+            var hb = bars[layer - 1].getBoundingClientRect();
+            tip.innerHTML = "Layer " + num(layer) + (info.length ? " · " + esc(info.join(" · ")) : "");
+            tip.style.left = (hb.left + hb.width / 2 - rect.left) + "px";
+            tip.classList.add("show");
+        }
+        // the bars are re-rendered when layer data changes: keep the magnification while the pointer is over them
+        var trackHover = false;
+        self.layerCells.subscribe(function () { if (trackHover && !trackFrame) trackFrame = requestAnimationFrame(magnify); });
+        self.trackMove = function (d, e) {
+            trackHover = true;
+            trackX = (e.originalEvent || e).clientX;
+            if (!trackFrame) trackFrame = requestAnimationFrame(magnify);
+            return true;
+        };
+        self.trackLeave = function () {
+            trackHover = false;
+            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
+            if (trackFrame) { cancelAnimationFrame(trackFrame); trackFrame = null; }
+            if (el) Array.prototype.forEach.call(el.children, function (b) { b.style.flexGrow = ""; b.style.transform = ""; b.classList.remove("hot"); });
+            if (tip) tip.classList.remove("show");
+            return true;
+        };
         self.layerTicks = ko.pureComputed(function () {
             var t = self.layerTotal();
             if (!t) return [];
             if (t < 8) return [1, t];
             return [1, Math.round(t / 4), Math.round(t / 2), Math.round(3 * t / 4), t];
         });
+
+        /* ====================== objects (exclude_object) ============= */
+        self.objects = ko.pureComputed(function () {
+            var eo = self.kstat().exclude_object || {}, skipped = eo.excluded_objects || [], cur = eo.current_object;
+            return (eo.objects || []).map(function (o) {
+                var poly = (o.polygon || []).map(function (p) { return p[0].toFixed(1) + "," + (220 - p[1]).toFixed(1); }).join(" ");
+                return { name: o.name, label: shortName(o.name.replace(/_id_\d+_copy_\d+$/, "").replace(/\.stl$/i, "").replace(/_/g, " ")),
+                         skipped: skipped.indexOf(o.name) >= 0, current: o.name === cur, points: poly };
+            });
+        });
+        self.objectsActive = ko.pureComputed(function () { return self.objects().filter(function (o) { return !o.skipped; }).length; });
+        self.skipObject = function (o) {
+            self.openMenu(null);
+            if (!(self.isPrinting() || self.isPaused())) return;
+            if (self.objectsActive() <= 1 && !o.skipped) {
+                self.confirm("Skip the last object?", "Nothing else is left to print, so this is the same as cancelling. Use Cancel print instead.", "Back", false, function () {});
+                return;
+            }
+            self.confirm("Skip " + o.label + "?", "Klipper stops printing this object for the rest of the job. The other objects carry on. This can't be undone.", "Skip object", true, function () {
+                self.gcode("EXCLUDE_OBJECT NAME=" + o.name);
+            });
+        };
 
         /* ====================== printer view text =================== */
         self.printerFinding = ko.pureComputed(function () {
@@ -296,6 +399,43 @@ $(function () {
             return (self.popupIsM600() ? "Filament change" : "Paused") + (self.layerTotal() > 0 ? " at layer " + self.layerCurrent() : "");
         });
         self.dismissPopup = function () { self.popupDismissed(true); };
+
+        // desktop notifications (need HTTPS or localhost, and permission)
+        self.notifyPref = ko.observable(store("notify") !== "0");
+        self.notifyPerm = ko.observable(window.Notification ? Notification.permission : "unsupported");
+        self.notifyOn = ko.pureComputed(function () { return self.notifyPref() && self.notifyPerm() === "granted"; });
+        self.notifyLabel = ko.pureComputed(function () {
+            if (!window.Notification) return "Desktop notifications: not supported here";
+            if (!window.isSecureContext) return "Desktop notifications: need the https:// address";
+            if (self.notifyPerm() === "denied") return "Desktop notifications: blocked in the browser";
+            return self.notifyOn() ? "Desktop notifications: on" : "Turn on desktop notifications";
+        });
+        self.toggleNotify = function () {
+            if (!window.Notification || !window.isSecureContext) { self.toast("Desktop notifications need the https:// address of OctoPrint (your Tailscale name).", "bad"); return; }
+            if (self.notifyOn()) { self.notifyPref(false); store("notify", "0"); return; }
+            self.notifyPref(true); store("notify", "1");
+            Notification.requestPermission().then(function (p) { self.notifyPerm(p); if (p === "granted") self.notify("Notifications are on", "You'll hear about pauses, filament changes and finished prints.", "kui-test"); });
+        };
+        self.notify = function (title, body, tag) {
+            if (!self.notifyOn()) return;
+            try { var n = new Notification(title, { body: body, tag: tag || "kobra-ui", icon: BASEURL + "static/img/tentacle-32x32.png" }); n.onclick = function () { window.focus(); n.close(); }; } catch (e) { /* ignore */ }
+        };
+        // ask once, on the first click anywhere, so the browser shows its permission prompt
+        $(document).one("click", function () {
+            if (window.Notification && window.isSecureContext && Notification.permission === "default" && store("notify") !== "0")
+                Notification.requestPermission().then(function (p) { self.notifyPerm(p); });
+        });
+        self.popupVisible.subscribe(function (v) {
+            if (v) self.notify(self.popupTitle(), self.popupIsM600() ? "Unload, insert the new filament, load, then Resume." : "The print is paused and waiting for Resume.", "kui-pause");
+        });
+        self.onEventPrintDone = function (p) {
+            self.loadFiles();
+            self.notify("Print finished", shortName(p && (p.name || p.path)) + " is done" + (p && p.time ? " after " + self.fmtDur(p.time) : "") + ".", "kui-done");
+        };
+        self.onEventPrintFailed = function (p) {
+            self.loadFiles();
+            self.notify("Print stopped", shortName(p && (p.name || p.path)) + (p && p.reason === "cancelled" ? " was cancelled." : " failed."), "kui-done");
+        };
 
         self.toastText = ko.observable(""); self.toastKind = ko.observable("");
         var toastTimer = null;
@@ -430,8 +570,6 @@ $(function () {
         self.onEventUpdatedFiles = function () { self.loadFiles(); };
         self.onEventFileAdded = function () { self.loadFiles(); };
         self.onEventFileRemoved = function () { self.loadFiles(); };
-        self.onEventPrintDone = function () { self.loadFiles(); };
-        self.onEventPrintFailed = function () { self.loadFiles(); };
 
         self.recentFiles = ko.pureComputed(function () {
             return self.allFiles().slice().sort(function (a, b) { return b.date - a.date; }).slice(0, 4);
@@ -500,6 +638,17 @@ $(function () {
             self.confirm("Print " + f.short + "?", "Selects the file and starts the print right away" + (f.printTime ? " (about " + self.fmtDur(f.printTime) + ")" : "") + ". Make sure the bed is clear.", "Start print", false, function () {
                 OctoPrint.files.select(f.origin, f.path, true).fail(function (x) { self.toast("Couldn't start the print: " + (x.responseJSON && x.responseJSON.error || x.statusText), "bad"); });
             });
+        };
+        self.previewFile = function (f) {
+            self.openMenu(null);
+            if (!f || f.type === "folder") return;
+            if (!self.canStartAny()) { self.toast("A print is running. Files can be previewed once it has finished.", "bad"); return; }
+            OctoPrint.files.select(f.origin, f.path, false).done(function () {
+                self.go("printer");
+                if (self.viewMode() === "webcam") self.setViewMode("3d"); else self.syncViewer();
+                self.toast("Loaded " + f.short + ". Check the preview, then Start print.", "good");
+                setTimeout(function () { var m = document.getElementById("kui-main"); if (m) m.scrollTo({ top: 0 }); }, 50);
+            }).fail(function (x) { self.toast("Couldn't load the file: " + (x.responseJSON && x.responseJSON.error || x.statusText), "bad"); });
         };
         function folderOf(p) { return p.indexOf("/") >= 0 ? p.slice(0, p.lastIndexOf("/")) : ""; }
         self.renameFile = function (f) {
@@ -779,7 +928,7 @@ $(function () {
         self.showTop = ko.observable(false);
         self.mainScroll = function (d, e) {
             var m = e.target;
-            self.showTop(m.scrollTop > 300 && m.scrollTop + m.clientHeight >= m.scrollHeight - 80);
+            self.showTop(m.scrollTop > Math.min(600, m.clientHeight * 0.6));
             return true;
         };
         self.scrollTop = function () {
@@ -816,6 +965,68 @@ $(function () {
             if (e.key === "`" && !self.cmdText()) { self.dockOpen(false); $(e.target).trigger("blur"); return false; }
             return true;
         };
+        self.keysVisible = ko.observable(false);
+        self.shortcutGroups = [
+            { title: "Anywhere", keys: [
+                { k: ["`"], d: "Open or close the console" }, { k: ["?"], d: "Show these shortcuts" },
+                { k: ["1"], d: "Printer" }, { k: ["2"], d: "Files" }, { k: ["3"], d: "Mesh" }, { k: ["4"], d: "Klipper" },
+                { k: ["/"], d: "Search files" }, { k: ["Esc"], d: "Close a dialog, menu or the console" },
+                { k: ["Ctrl", "Shift", "E"], d: "Emergency stop" } ] },
+            { title: "Printing", keys: [
+                { k: ["Shift", "P"], d: "Pause or resume" }, { k: ["Shift", "M"], d: "Change filament now (M600)" },
+                { k: ["Shift", "N"], d: "Pause at the next layer" }, { k: ["Shift", "C"], d: "Cancel the print…" },
+                { k: ["V"], d: "Switch Webcam / 3D / 2D" } ] },
+            { title: "Machine", keys: [
+                { k: ["Shift", "H"], d: "Home all axes" }, { k: ["Shift", "L"], d: "Load filament" },
+                { k: ["Shift", "U"], d: "Unload filament" }, { k: ["Shift", "O"], d: "Z offset…" } ] },
+            { title: "Console & editor", keys: [
+                { k: ["Tab"], d: "Complete a command" }, { k: ["↑", "↓"], d: "Command history" },
+                { k: ["Ctrl", "S"], d: "Save the config" }, { k: ["Ctrl", "Shift", "S"], d: "Save & restart Klipper" },
+                { k: ["Ctrl", "F"], d: "Find in the config" } ] },
+            { title: "Files", keys: [
+                { k: ["Enter"], d: "Preview the selected file" }, { k: ["Ctrl", "A"], d: "Select all (in Select mode)" },
+                { k: ["Delete"], d: "Delete the selected files…" } ] }
+        ];
+        function anyDialog() { return self.confirmVisible() || self.promptVisible() || self.diffVisible() || self.offsetVisible() || self.keysVisible() || self.popupVisible(); }
+        $(document).on("keydown.kui", function (ev) {
+            if (!$("html").hasClass("kui-on") || $(".modal.in:visible").length) return;
+            var e = ev.originalEvent || ev, key = e.key, tag = (e.target.tagName || "").toLowerCase();
+            var typing = tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable;
+            if (key === "Escape") {
+                if (self.keysVisible()) { self.keysVisible(false); return false; }
+                return self.onKeyDown(null, e);
+            }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && key.toLowerCase() === "e") { self.emergencyStop(); return false; }
+            if (self.route() === "editor" && (e.ctrlKey || e.metaKey) && e.shiftKey && key.toLowerCase() === "s") { self.saveConfig(true); return false; }
+            if (typing || e.ctrlKey && key.toLowerCase() !== "a" || e.metaKey || e.altKey) {
+                if (key === "`" && e.target.id === "kui-cmd" && !self.cmdText()) { self.dockOpen(false); $(e.target).trigger("blur"); return false; }
+                return true;
+            }
+            if (anyDialog() && key !== "?") return true;
+            var k2 = key.length === 1 ? key.toLowerCase() : key;
+            switch (e.shiftKey && key.length === 1 ? "S-" + k2 : k2) {
+                case "`": self.dockOpen(!self.dockOpen()); if (self.dockOpen()) setTimeout(function () { $("#kui-cmd").trigger("focus"); }, 0); return false;
+                case "?": case "S-?": self.keysVisible(!self.keysVisible()); return false;
+                case "1": self.go("printer"); return false;
+                case "2": self.go("files"); return false;
+                case "3": self.go("mesh"); return false;
+                case "4": self.go("klipper"); return false;
+                case "/": self.go("files"); setTimeout(function () { $("#kui .search input").trigger("focus"); }, 30); return false;
+                case "v": var modes = ["webcam", "3d", "2d"]; self.setViewMode(modes[(modes.indexOf(self.viewMode()) + 1) % 3]); return false;
+                case "S-p": if (self.isPaused()) self.resumePrint(); else if (self.isPrinting()) self.pausePrint(); return false;
+                case "S-m": if (self.isPrinting()) self.gcode("M600"); return false;
+                case "S-n": if (self.isOperational()) self.setPauseNextLayer(); return false;
+                case "S-c": if (self.isPrinting() || self.isPaused()) self.cancelPrint(); return false;
+                case "S-h": if (self.canMachine()) self.gcode("G28"); return false;
+                case "S-l": if (self.canFilament()) self.gcode("LOAD_FILAMENT"); return false;
+                case "S-u": if (self.canFilament()) self.gcode("UNLOAD_FILAMENT"); return false;
+                case "S-o": if (self.isOperational()) self.offsetVisible(true); return false;
+                case "a": if (e.ctrlKey && self.route() === "files" && self.selectMode()) { self.pickedPaths(self.tiles().filter(function (t) { return t.type !== "folder"; }).map(function (t) { return t.path; })); return false; } return true;
+                case "Enter": if (self.route() === "files" && self.selectedFile()) { self.previewFile(self.selectedFile()); return false; } return true;
+                case "Delete": if (self.route() === "files") { var sel = self.selectMode() ? self.picked() : (self.selectedFile() ? [self.selectedFile()] : []); if (sel.length) self.deleteFiles(sel); return false; } return true;
+            }
+            return true;
+        });
         self.onKeyDown = function (d, e) {
             var tag = (e.target.tagName || "").toLowerCase();
             if (e.key === "Escape") {
@@ -825,11 +1036,7 @@ $(function () {
                 if (self.offsetVisible()) { self.offsetVisible(false); return false; }
                 if (self.openMenu()) { self.openMenu(null); return false; }
             }
-            if (e.key === "`" && tag !== "input" && tag !== "textarea") {
-                self.dockOpen(!self.dockOpen());
-                if (self.dockOpen()) setTimeout(function () { $("#kui-cmd").trigger("focus"); }, 0);
-                return false;
-            }
+            if (e.key === "Escape" && self.dockOpen()) { self.dockOpen(false); $("#kui-cmd").trigger("blur"); return false; }
             return true;
         };
 
@@ -1054,11 +1261,27 @@ $(function () {
             window.dispatchEvent(new Event("resize"));
             setTimeout(self.fit2d, 60);
         };
+        // size the 2D canvas to the pane and let the renderer re-fit the bed (fills the card, no letterboxing)
+        var last2d = "";
         self.fit2d = function () {
-            var pane = document.getElementById("kui-v-2d"), cc = document.getElementById("canvas_container");
-            if (!pane || !cc || self.viewMode() !== "2d") return;
-            var s = Math.min((pane.clientWidth - 24) / cc.offsetWidth, (pane.clientHeight - 24) / cc.offsetHeight, 1.5);
-            if (s > 0 && isFinite(s)) pane.style.setProperty("--s2d", s.toFixed(3));
+            var pane = document.getElementById("kui-v-2d"), canvas = document.getElementById("gcode_canvas"), cc = document.getElementById("canvas_container");
+            if (!pane || !canvas || !cc || self.viewMode() !== "2d" || !pane.clientWidth) return;
+            var W = Math.floor(pane.clientWidth - 20 - 26), H = Math.floor(pane.clientHeight - 20 - 26);
+            if (W < 100 || H < 100) return;
+            var key = W + "x" + H;
+            var vs = cc.querySelector("#gcode_layer_slider, .slider-vertical"), hs = cc.querySelector("#gcode_command_slider, .slider-horizontal");
+            if (vs) vs.style.height = H + "px";
+            if (hs) hs.style.width = W + "px";
+            cc.style.width = (W + 26) + "px";
+            if (key === last2d) return;
+            last2d = key;
+            var pr = window.devicePixelRatio || 1;
+            canvas.style.width = W + "px"; canvas.style.height = H + "px";
+            canvas.width = Math.round(W * pr); canvas.height = Math.round(H * pr);
+            try {
+                var r = window.GCODE && GCODE.renderer;
+                if (r && r.getOptions && r.setOption) r.setOption({ bed: $.extend({}, r.getOptions().bed) }); // new object: re-runs resetViewport + render
+            } catch (e) { /* the viewer may not be initialised yet */ }
         };
         self.theme2d = function () {
             try {
@@ -1074,13 +1297,19 @@ $(function () {
             var g = document.getElementById("kui-canvas");
             if (!g || self.route() !== "printer") return;
             var cols = getComputedStyle(g).gridTemplateColumns.split(" ").filter(Boolean).length, row = 4, gap = 24;
+            // cards are align-self:start, so their height is their content height whatever their span:
+            // measure in place and only touch spans that change (resetting them collapsed the page and
+            // threw the scroll position back to the top while printing)
+            var main = document.getElementById("kui-main"), keep = main ? main.scrollTop : 0;
             Array.prototype.forEach.call(g.children, function (c) {
-                if ($(c).hasClass("wide")) c.style.gridColumn = cols >= 6 ? "span 3" : (cols >= 2 ? "span 2" : "auto");
-                c.style.gridRowEnd = "auto";
+                if ($(c).hasClass("wide")) {
+                    var span = cols >= 6 ? "span 3" : (cols >= 2 ? "span 2" : "auto");
+                    if (c.style.gridColumn !== span) c.style.gridColumn = span;
+                }
+                var want = "span " + Math.ceil((c.getBoundingClientRect().height + gap) / row);
+                if (c.style.gridRowEnd !== want) c.style.gridRowEnd = want;
             });
-            Array.prototype.forEach.call(g.children, function (c) {
-                c.style.gridRowEnd = "span " + Math.ceil((c.getBoundingClientRect().height + gap) / row);
-            });
+            if (main && main.scrollTop !== keep) main.scrollTop = keep;
         };
         self.measureBars = function () {
             var root = document.getElementById("kui");

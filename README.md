@@ -20,6 +20,12 @@ editor, and keeps every OctoPrint dialog working on top of it.
   compares or restores any version, including Klipper's own `printer-*.cfg` backups.
 - **Console dock:** last reply always visible; press `` ` `` to expand, drag its edge to resize, Tab
   completes Klipper commands and macros.
+- **Objects:** skip a single object mid-print with Klipper's `EXCLUDE_OBJECT` (Live view → Objects, or click its
+  outline on the 2D bed map).
+- **Layer track:** hover to magnify (dock-style) with the layer number; armed pauses and filament changes are
+  colour coded, earlier pauses marked. Click a layer to pause there.
+- **Desktop notifications** for pauses, filament changes, finished or failed prints and Klipper errors (needs the
+  `https://` address), and **keyboard shortcuts** for everything (press `?`).
 - A large **Emergency stop** on every screen, sent straight to Klipper's API socket as well as over
   serial (M112).
 
@@ -32,6 +38,7 @@ accent in the filament orange.
 - Klipper's API socket at `~/printer_data/comms/klippy.sock` (the KIAUH default).
 - The macros in `klipper/macros.cfg` (PAUSE/RESUME with pause reasons, M600, LOAD/UNLOAD/PURGE_FILAMENT,
   PREHEAT, COOLDOWN, PARK, CLEAN_NOZZLE, MESH_CALIBRATE, PID_*, DRY_FILAMENT, SET_PAUSE_AT_LAYER...).
+- `[exclude_object]` in `printer.cfg` and "Label objects" in the slicer (replaces the Cancelobject plugin).
 - Optional: PrettyGCode (3D view), Bed Visualizer (supplies Plotly for the 3D mesh), OctoKlipper
   (maintenance dialogs), Slicer Thumbnails (file images).
 

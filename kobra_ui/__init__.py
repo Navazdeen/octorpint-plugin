@@ -39,6 +39,7 @@ SUBSCRIBE_OBJECTS = {
     "fan": ["speed"],
     "temperature_sensor mcu_temp": ["temperature"],
     "configfile": ["settings"],
+    "exclude_object": ["objects", "excluded_objects", "current_object"],
 }
 
 # serial chatter that is not worth showing in the console
@@ -397,7 +398,7 @@ def _history(name):
 
 
 __plugin_name__ = "Kobra UI"
-__plugin_version__ = "2.1.0"
+__plugin_version__ = "2.2.4"
 __plugin_description__ = "Full-screen console for the Kobra 2 Neo on OctoPrint + Klipper"
 __plugin_pythoncompat__ = ">=3.9,<4"
 __plugin_implementation__ = KobraUiPlugin()
