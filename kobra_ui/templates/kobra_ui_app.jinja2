@@ -92,13 +92,14 @@
             </div>
             <div class="track">
               <div class="track-head">
-                <span data-bind="text: layerTotal() > 0 ? 'Layers. Click one to pause there.' : 'Layers appear here while a print runs.'"></span>
+                <span data-bind="text: !layerTotal() ? 'Load a file to see its layers.' : (!layerTracking() ? 'This file has no layer tracking: re-slice it in Orca to pause at a layer.' + (layerEstimated() ? ' Current layer worked out from Z.' : '') : ((isPrinting() || isPaused()) ? 'Layers. Click one to pause there.' : 'Layers. Click one to pause there once the print starts.'))"></span>
                 <span data-bind="html: armedTrackText()"></span>
               </div>
               <div class="layerwrap">
                 <div class="laytip" aria-hidden="true" id="kui-laytip"></div>
-                <div class="layers" id="kui-layers" aria-label="Layer track" data-bind="foreach: layerCells, css: { off: !(isPrinting() || isPaused()) }, event: { mousemove: trackMove, mouseleave: trackLeave }">
-                  <button data-bind="css: $data.cls, attr: { 'aria-label': $data.title, 'data-layer': $data.layer }, click: function() { $root.pauseAtLayerClick($data.layer) }"></button>
+                <div class="loupe" aria-hidden="true" id="kui-loupe"></div>
+                <div class="layers" id="kui-layers" aria-label="Layer track" data-bind="foreach: layerCells, css: { off: !layerTracking() }, event: { mousemove: trackMove, mouseleave: trackLeave }">
+                  <button data-bind="css: $data.cls, attr: { 'aria-label': $data.title, 'data-layer': $data.layer }, click: function() { $root.trackClick($data.layer) }"></button>
                 </div>
               </div>
               <div class="track-foot" data-bind="foreach: layerTicks"><span class="num" data-bind="text: $data"></span></div>
@@ -546,11 +547,16 @@
 
   <div class="kmodalwrap" data-bind="visible: confirmVisible()" role="dialog" aria-modal="true" aria-labelledby="kui-conf-h">
     <div class="kmodal">
-      <h4 id="kui-conf-h"><i class="fa-solid fa-triangle-exclamation"></i><span data-bind="text: confirmTitle()"></span></h4>
+      <h4 id="kui-conf-h"><i class="fa-solid" data-bind="css: confirmInfo() ? 'fa-circle-info' : 'fa-triangle-exclamation'"></i><span data-bind="text: confirmTitle()"></span></h4>
       <p data-bind="text: confirmText()"></p>
       <div class="foot">
+        <!-- ko if: confirmInfo() -->
+        <button class="kb primary" data-bind="click: confirmNo"><i class="fa-solid fa-check"></i>OK</button>
+        <!-- /ko -->
+        <!-- ko ifnot: confirmInfo() -->
         <button class="kb" data-bind="click: confirmNo"><i class="fa-solid fa-xmark"></i>Back</button>
         <button class="kb" data-bind="css: confirmDanger() ? 'danger' : 'primary', click: confirmYes"><i class="fa-solid fa-check"></i><span data-bind="text: confirmButton()"></span></button>
+        <!-- /ko -->
       </div>
     </div>
   </div>

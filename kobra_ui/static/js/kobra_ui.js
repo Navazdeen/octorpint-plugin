@@ -87,8 +87,31 @@ $(function () {
             if (st === "shutdown" || st === "error") self.notify("Klipper " + st, k("webhooks", "state_message", "The printer stopped."), "kui-klipper");
         });
         self.isOperational = ko.pureComputed(function () { return self.isConnected() && self.klipperReady(); });
-        self.layerCurrent = ko.pureComputed(function () { return (k("print_stats", "info", {}) || {}).current_layer || 0; });
-        self.layerTotal = ko.pureComputed(function () { return (k("print_stats", "info", {}) || {}).total_layer || 0; });
+        self.kLayerCurrent = ko.pureComputed(function () { return (k("print_stats", "info", {}) || {}).current_layer || 0; });
+        self.kLayerTotal = ko.pureComputed(function () { return (k("print_stats", "info", {}) || {}).total_layer || 0; });
+        // layers read from the loaded G-code file (works before printing and for files without tracking)
+        self.fileLayers = ko.observable({ path: "", total: 0, z: [], tracking: false });
+        self.layerTracking = ko.pureComputed(function () { return !!self.fileLayers().tracking; });
+        self.layerFromZ = ko.pureComputed(function () {
+            var z = self.fileLayers().z, p = k("gcode_move", "gcode_position", [0, 0, 0]), h = (p && p[2]) || 0;
+            if (!z.length || h <= 0) return 0;
+            var lo = 0, hi = z.length - 1;               // last layer whose height is <= the nozzle height
+            if (h < z[0] - 0.001) return 0;
+            while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (z[mid] <= h + 0.001) lo = mid; else hi = mid - 1; }
+            return lo + 1;
+        });
+        self.layerTotal = ko.pureComputed(function () {
+            var live = self.flags().printing || self.flags().paused || self.flags().pausing || self.flags().resuming;
+            if (live && self.layerTracking() && self.kLayerTotal() > 0) return self.kLayerTotal();
+            return self.fileLayers().total || 0;
+        });
+        self.layerCurrent = ko.pureComputed(function () {
+            var live = self.flags().printing || self.flags().paused || self.flags().pausing || self.flags().resuming;
+            if (!live) return 0;
+            if (self.layerTracking() && self.kLayerTotal() > 0) return self.kLayerCurrent();
+            return self.layerFromZ();
+        });
+        self.layerEstimated = ko.pureComputed(function () { return self.layerCurrent() > 0 && !(self.layerTracking() && self.kLayerTotal() > 0); });
         self.layerStarted = ko.observable(null);
         self.lastLayerSecs = ko.observable(null);
         self.layerCurrent.subscribe(function (n) {
@@ -213,7 +236,8 @@ $(function () {
         self.setPauseNextLayer = function () { self.gcode("SET_PAUSE_NEXT_LAYER MACRO=" + self.pauseMacro()); };
         self.clearPauseLayer = function () { self.gcode("SET_PAUSE_AT_LAYER ENABLE=0"); self.gcode("SET_PAUSE_NEXT_LAYER ENABLE=0"); };
         self.pauseAtLayerClick = function (layer) {
-            if (!(self.isPrinting() || self.isPaused()) || layer <= self.layerCurrent()) return;
+            if (!self.layerTracking()) { self.toast("This file was sliced without layer tracking. Re-slice it in Orca to pause at a layer.", "bad"); return; }
+            if (!self.isOperational() || layer <= self.layerCurrent()) return;
             self.pauseLayerInput(String(layer));
             self.gcode("SET_PAUSE_AT_LAYER LAYER=" + layer + " MACRO=" + self.pauseMacro());
         };
@@ -251,7 +275,10 @@ $(function () {
             else if (i < cur) bits.push("printed");
             if (a && a.layer === i) bits.push((a.kind === "Pause" ? "pause" : "filament change") + " armed");
             if (past) bits.push(past.kind === "m600" ? "filament changed here" : "paused here");
-            if (i > cur && !(a && a.layer === i) && (self.isPrinting() || self.isPaused())) bits.push("click to " + (self.pauseMacro() === "M600" ? "change filament" : "pause") + " here");
+            if (!self.layerTracking()) { if (i === 1) bits.push("re-slice to pause at a layer"); }
+            else if (i > cur && !(a && a.layer === i) && self.isOperational()) bits.push("click to " + (self.pauseMacro() === "M600" ? "change filament" : "pause") + " here");
+            var zl = self.fileLayers().z[i - 1];
+            if (zl !== undefined) bits.unshift("Z " + zl.toFixed(2) + " mm");
             return bits;
         };
         self.layerCells = ko.pureComputed(function () {
@@ -265,42 +292,69 @@ $(function () {
             }
             return out;
         });
-        // dock-style magnifier: bars near the cursor grow wider and taller
-        var trackFrame = null, trackX = 0;
+        // dock-style magnifier drawn as a lens above the track: the track's bars never move, so the cursor maps
+        // linearly onto a layer, and each frame only touches ~15 lens bars (no layout reads after writes)
+        var LENS = 7, trackFrame = null, trackX = 0, trackHover = false, trackRect = null, barLefts = null, lensBars = [], lastHot = -1;
+        function lensSetup() {
+            var lens = document.getElementById("kui-loupe");
+            if (!lens || lensBars.length) return;
+            for (var j = -LENS; j <= LENS; j++) {
+                var b = document.createElement("i"), g = Math.exp(-(j * j) / (2 * 2.6 * 2.6));
+                b.style.width = (3 + 9 * g).toFixed(1) + "px";
+                b.style.height = (20 + 26 * g).toFixed(1) + "px";
+                lens.appendChild(b); lensBars.push(b);
+            }
+        }
         function magnify() {
             trackFrame = null;
-            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
-            if (!el || !el.children.length) return;
-            var bars = el.children, rect = el.getBoundingClientRect(), n = bars.length;
-            var pos = Math.max(0, Math.min(n - 1, (trackX - rect.left) / rect.width * n));
-            var sigma = Math.max(2.5, Math.min(7, n / 30)), hotIdx = Math.round(pos - 0.5);
-            for (var i = 0; i < n; i++) {
-                var d = (i + 0.5 - pos) / sigma, g = Math.exp(-d * d / 2);
-                bars[i].style.flexGrow = (1 + 5 * g).toFixed(3);
-                bars[i].style.transform = "scaleY(" + (1 + 0.55 * g).toFixed(3) + ")";
-                bars[i].classList.toggle("hot", i === hotIdx);
+            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip"), lens = document.getElementById("kui-loupe");
+            if (!el || !lens || !el.children.length) return;
+            lensSetup();
+            var n = el.children.length;
+            if (!trackRect || !barLefts || barLefts.length !== n) {   // one layout read per hover, not per frame
+                trackRect = el.getBoundingClientRect();
+                barLefts = Array.prototype.map.call(el.children, function (b) { return b.getBoundingClientRect().left - trackRect.left; });
             }
-            var layer = Math.max(1, Math.min(n, hotIdx + 1)), info = self.layerInfo(layer);
-            var hb = bars[layer - 1].getBoundingClientRect();
-            tip.innerHTML = "Layer " + num(layer) + (info.length ? " · " + esc(info.join(" · ")) : "");
-            tip.style.left = (hb.left + hb.width / 2 - rect.left) + "px";
-            tip.classList.add("show");
+            var x = Math.max(0, Math.min(trackRect.width - 0.01, trackX - trackRect.left));
+            var lo = 0, hi = n - 1;                                      // last bar whose left edge is at or before x
+            while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (barLefts[mid] <= x) lo = mid; else hi = mid - 1; }
+            var hot = lo, cells = self.layerCells();
+            if (hot !== lastHot) {
+                if (lastHot >= 0 && el.children[lastHot]) el.children[lastHot].classList.remove("hot");
+                if (el.children[hot]) el.children[hot].classList.add("hot");
+                for (var j = -LENS; j <= LENS; j++) {
+                    var i = hot + j, bar = lensBars[j + LENS];
+                    bar.className = i < 0 || i >= n ? "gone" : (cells[i] ? cells[i].cls : "");
+                }
+                var layer = hot + 1, info = self.layerInfo(layer);
+                tip.innerHTML = "Layer " + num(layer) + (info.length ? " · " + esc(info.join(" · ")) : "");
+                lastHot = hot;
+            }
+            var cx = barLefts[hot] + (hot + 1 < n ? (barLefts[hot + 1] - barLefts[hot]) : (trackRect.width - barLefts[hot])) / 2;
+            lens.style.transform = "translateX(" + cx.toFixed(1) + "px) translateX(-50%)";
+            tip.style.transform = "translateX(" + cx.toFixed(1) + "px) translateX(-50%)";
+            lens.classList.add("show"); tip.classList.add("show");
         }
-        // the bars are re-rendered when layer data changes: keep the magnification while the pointer is over them
-        var trackHover = false;
-        self.layerCells.subscribe(function () { if (trackHover && !trackFrame) trackFrame = requestAnimationFrame(magnify); });
+        self.layerCells.subscribe(function () { lastHot = -1; barLefts = null; if (trackHover && !trackFrame) trackFrame = requestAnimationFrame(magnify); });
+        $(window).on("resize", function () { trackRect = null; barLefts = null; });
+        document.addEventListener("scroll", function () { trackRect = null; }, true);
         self.trackMove = function (d, e) {
-            trackHover = true;
+            if (!trackHover) { trackHover = true; trackRect = null; }
             trackX = (e.originalEvent || e).clientX;
             if (!trackFrame) trackFrame = requestAnimationFrame(magnify);
             return true;
         };
+        // a click arms the layer shown in the label and lens (bars are under 2 px wide; the browser's pixel-snapped
+        // hit test can land on the neighbour at a boundary)
+        self.trackClick = function (layer) { self.pauseAtLayerClick(trackHover && lastHot >= 0 ? lastHot + 1 : layer); };
         self.trackLeave = function () {
             trackHover = false;
-            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
+            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip"), lens = document.getElementById("kui-loupe");
             if (trackFrame) { cancelAnimationFrame(trackFrame); trackFrame = null; }
-            if (el) Array.prototype.forEach.call(el.children, function (b) { b.style.flexGrow = ""; b.style.transform = ""; b.classList.remove("hot"); });
+            if (el && lastHot >= 0 && el.children[lastHot]) el.children[lastHot].classList.remove("hot");
+            lastHot = -1;
             if (tip) tip.classList.remove("show");
+            if (lens) lens.classList.remove("show");
             return true;
         };
         self.layerTicks = ko.pureComputed(function () {
@@ -324,7 +378,7 @@ $(function () {
             self.openMenu(null);
             if (!(self.isPrinting() || self.isPaused())) return;
             if (self.objectsActive() <= 1 && !o.skipped) {
-                self.confirm("Skip the last object?", "Nothing else is left to print, so this is the same as cancelling. Use Cancel print instead.", "Back", false, function () {});
+                self.inform("This is the only object left", "Skipping it would leave nothing to print. To stop this print, use Cancel print instead.");
                 return;
             }
             self.confirm("Skip " + o.label + "?", "Klipper stops printing this object for the rest of the job. The other objects carry on. This can't be undone.", "Skip object", true, function () {
@@ -374,6 +428,10 @@ $(function () {
         };
         self.confirmYes = function () { self.confirmVisible(false); var a = confirmAction; confirmAction = null; if (a) a(); };
         self.confirmNo = function () { self.confirmVisible(false); confirmAction = null; };
+        // a message with one OK button (no action to confirm)
+        self.confirmInfo = ko.observable(false);
+        self.inform = function (title, text) { self.confirm(title, text, "", false, null); self.confirmInfo(true); };
+        self.confirmVisible.subscribe(function (v) { if (!v) self.confirmInfo(false); });
 
         self.promptVisible = ko.observable(false);
         self.promptTitle = ko.observable(""); self.promptLabel = ko.observable(""); self.promptButton = ko.observable("OK");
@@ -1338,6 +1396,14 @@ $(function () {
             }
         };
         self.fromHistoryData = self.fromCurrentData;
+        self.loadFileLayers = function (path) {
+            if (!path) { self.fileLayers({ path: "", total: 0, z: [], tracking: false }); return; }
+            if (self.fileLayers().path === path) return;
+            OctoPrint.get("plugin/" + PLUGIN + "/layers?path=" + encodeURIComponent(path)).done(function (r) {
+                if (self.filePath() === path) self.fileLayers({ path: path, total: r.total || 0, z: r.z || [], tracking: !!r.tracking });
+            }).fail(function () { self.fileLayers({ path: path, total: 0, z: [], tracking: false }); });
+        };
+        self.filePath.subscribe(self.loadFileLayers);
         self.applyKlipper = function (p) {
             if (!p) return;
             if (p.connected !== undefined) self.kconnected(!!p.connected);

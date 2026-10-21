@@ -22,6 +22,8 @@ KLIPPY_SOCKET = os.path.expanduser("~/printer_data/comms/klippy.sock")
 KLIPPY_LOG = os.path.expanduser("~/printer_data/logs/klippy.log")
 CONFIG_DIR = os.path.expanduser("~/printer_data/config")
 HISTORY_DIR = os.path.join(CONFIG_DIR, ".kui_history")
+UPLOADS_DIR = os.path.expanduser("~/.octoprint/uploads")
+_LAYER_CACHE = {}
 SAVE_CONFIG_MARK = "#*#"
 MAX_CONFIG_BYTES = 1024 * 1024
 CONSOLE_LINES = 300
@@ -324,6 +326,20 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
                     return flask.jsonify({"id": vid, "content": f.read()})
         flask.abort(404)
 
+    @octoprint.plugin.BlueprintPlugin.route("/layers", methods=["GET"])
+    def file_layers(self):
+        """Layer count and heights of an uploaded G-code file, and whether it carries layer tracking."""
+        rel = flask.request.args.get("path", "")
+        base = os.path.realpath(UPLOADS_DIR)
+        path = os.path.realpath(os.path.join(base, rel))
+        if not rel or not path.startswith(base + os.sep) or not os.path.isfile(path):
+            flask.abort(404)
+        key = (path, os.path.getmtime(path))
+        if key not in _LAYER_CACHE:
+            _LAYER_CACHE.clear()
+            _LAYER_CACHE[key] = _scan_layers(path)
+        return flask.jsonify(_LAYER_CACHE[key])
+
     # --- ui -----------------------------------------------------------------
     def is_template_autoescaped(self):
         return True
@@ -346,6 +362,31 @@ def _klippy_started():
         return float(hits[-1]) if hits else None
     except OSError:
         return None
+
+
+def _scan_layers(path):
+    """Orca/Prusa style: ';LAYER_CHANGE' then ';Z:<height>'. Falls back to the header's layer count."""
+    zs, tracking, pending, total_hint = [], False, False, None
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            c = line[:1]
+            if c == ";":
+                if line.startswith(";LAYER_CHANGE"):
+                    pending = True
+                elif pending and line.startswith(";Z:"):
+                    try:
+                        zs.append(round(float(line[3:].strip()), 3))
+                    except ValueError:
+                        pass
+                    pending = False
+                elif line.startswith("; total layers count") and total_hint is None:
+                    try:
+                        total_hint = int(line.split("=", 1)[1])
+                    except (IndexError, ValueError):
+                        pass
+            elif c == "S" and line.startswith("SET_PRINT_STATS_INFO CURRENT_LAYER"):
+                tracking = True
+    return {"total": len(zs) or (total_hint or 0), "z": zs, "tracking": tracking}
 
 
 def _config_path(name):
@@ -398,7 +439,7 @@ def _history(name):
 
 
 __plugin_name__ = "Kobra UI"
-__plugin_version__ = "2.2.4"
+__plugin_version__ = "2.3.3"
 __plugin_description__ = "Full-screen console for the Kobra 2 Neo on OctoPrint + Klipper"
 __plugin_pythoncompat__ = ">=3.9,<4"
 __plugin_implementation__ = KobraUiPlugin()

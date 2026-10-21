@@ -18,7 +18,10 @@ Klipper is deployed while a print is running.
 | U10 | Cancelobject plugin's bar and overlay land on top of the 2D view (it inserts them next to the moved canvas); hidden inside Kobra UI, objects are skipped via Klipper EXCLUDE_OBJECT instead | deployed + verified |
 | U11 | Uninstall the Cancelobject plugin (Klipper's [exclude_object] + Orca's EXCLUDE_OBJECT_DEFINE already cover it) | done: uninstalled |
 | U12 | 2D view is a small centred square instead of filling the Live view; resize the canvas to the pane and let the renderer re-fit the bed | deployed + verified |
+| U15 | Magnified layer line lagged behind / drifted from the cursor (slow and fast moves). Rebuilt as a lens over a fixed track: exact bar edges measured once per hover, ~15 lens bars per frame, GPU transform; 58-59 fps headless, lens within 2 px of the cursor | deployed + verified |
 | U7 | Console shortcut (`) sometimes doesn't work; add a full set of keyboard shortcuts | deployed + verified |
+| U13 | Skip-object dialog for the last object had two "Back" buttons; now an info dialog with one OK | deployed + verified |
+| U14 | Pause-at-layer track empty in preview and for files sliced before layer tracking; layers now read from the G-code file (pre-arm before printing; untracked files show the track with the layer worked out from Z, pausing disabled with a re-slice note) | deployed + verified |
 
 ## Found by the runtime test (testprint.py / testprint_cont.py)
 
@@ -35,5 +38,8 @@ Klipper is deployed while a print is running.
 | V2 | Bed map overlapped the 2D canvas corner and segment slider; moved to the top-right corner | deployed + verified |
 | V3 | Layer track lost its magnification when the bars re-rendered (once per layer); re-applied on re-render | deployed + verified |
 | V4 | Gallery Preview pill overlapped the Print button; Preview centred on the image | deployed + verified |
+| V6 | At sub-pixel bar boundaries a click could arm the neighbouring layer; a click now arms the layer in the label (81/81 clicks matched) | deployed + verified |
+| V7 | Deploys no longer need the password: SSH key login to the Cubie, OctoPrint restarted via its API (tools/deploy.sh); password helper deleted | done |
+| V5 | deploy.sh only refused to restart while Klipper reported Printing; a paused print would have been killed. Now also refuses while paused | fixed |
 
 Verification: `tools/shot/verify.js` + `probe8.js` (U1, U3–U12 pass; print-only states simulated in the browser only).

@@ -268,7 +268,7 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .track-head b { color: var(--text); font-weight: 500; }
 #kui .layerwrap { position: relative; }
 #kui .layers { display: flex; gap: 1px; height: 44px; align-items: flex-end; }
-#kui .layers button { flex: 1 1 0; min-width: 0; height: 18px; background: #2a2930; border-radius: 1px; border: 0; padding: 0; cursor: pointer; transform-origin: bottom; }
+#kui .layers button { flex: 1 1 0; min-width: 0; height: 18px; background: #2a2930; border-radius: 1px; border: 0; padding: 0; cursor: pointer; }
 #kui .layers button.done { background: var(--accent); }
 #kui .layers button.now { height: 30px; background: #fff; }
 #kui .layers button.pause { height: 30px; background: #4a8ad6; }
@@ -277,7 +277,17 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .layers button.was-m600 { box-shadow: inset 0 3px 0 #f0c86e; }
 #kui .layers button.hot { filter: brightness(1.35); }
 #kui .layers.off button { cursor: default; }
-#kui .laytip { position: absolute; bottom: 50px; transform: translateX(-50%); white-space: nowrap; background: var(--raised); color: #fff; font-size: 12px; padding: 4px 10px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.45); pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 3; }
+#kui .loupe { position: absolute; left: 0; bottom: 0; height: 46px; display: flex; align-items: flex-end; gap: 2px; padding: 0 4px;
+  background: rgba(19,18,23,.92); border-radius: 6px 6px 0 0; box-shadow: 0 -6px 18px rgba(0,0,0,.45); pointer-events: none;
+  opacity: 0; z-index: 2; will-change: transform; }
+#kui .loupe.show { opacity: 1; }
+#kui .loupe i { display: block; flex: none; background: #2a2930; border-radius: 1px; }
+#kui .loupe i.done { background: var(--accent); } #kui .loupe i.now { background: #fff; }
+#kui .loupe i.pause { background: #4a8ad6; } #kui .loupe i.m600 { background: var(--warning); }
+#kui .loupe i.was-pause { box-shadow: inset 0 3px 0 #7fa9de; } #kui .loupe i.was-m600 { box-shadow: inset 0 3px 0 #f0c86e; }
+#kui .loupe i.gone { visibility: hidden; }
+#kui .loupe i:nth-child(8) { outline: 1px solid #fff; outline-offset: 1px; }
+#kui .laytip { position: absolute; left: 0; bottom: 54px; white-space: nowrap; background: var(--raised); color: #fff; font-size: 12px; padding: 4px 10px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.45); pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 3; }
 #kui .laytip.show { opacity: 1; }
 #kui .laytip .num { color: var(--accent-ink); }
 #kui .laylegend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 11px; color: var(--muted); }
