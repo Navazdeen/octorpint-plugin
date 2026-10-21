@@ -292,54 +292,55 @@ $(function () {
             }
             return out;
         });
-        // dock-style magnifier drawn as a lens above the track: the track's bars never move, so the cursor maps
-        // linearly onto a layer, and each frame only touches ~15 lens bars (no layout reads after writes)
-        var LENS = 7, trackFrame = null, trackX = 0, trackHover = false, trackRect = null, barLefts = null, lensBars = [], lastHot = -1;
-        function lensSetup() {
-            var lens = document.getElementById("kui-loupe");
-            if (!lens || lensBars.length) return;
-            for (var j = -LENS; j <= LENS; j++) {
-                var b = document.createElement("i"), g = Math.exp(-(j * j) / (2 * 2.6 * 2.6));
-                b.style.width = (3 + 9 * g).toFixed(1) + "px";
-                b.style.height = (20 + 26 * g).toFixed(1) + "px";
-                lens.appendChild(b); lensBars.push(b);
-            }
+        // Dock-style magnifier on the real bars, transforms only (no layout work per frame):
+        // every bar's scale follows a Gaussian of its distance to the exact pointer position, and the bars are laid
+        // out analytically so the bar under the pointer stays under it (left side spreads left, right side right)
+        var trackFrame = null, trackX = 0, trackHover = false, trackRect = null, barLefts = null, barW = 0, lastHot = -1, settleTimer = null;
+        function measureTrack(el) {
+            trackRect = el.getBoundingClientRect();
+            barLefts = Array.prototype.map.call(el.children, function (b) { return b.getBoundingClientRect().left - trackRect.left; });
+            barW = el.children.length ? el.children[0].getBoundingClientRect().width : 0;
         }
         function magnify() {
             trackFrame = null;
-            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip"), lens = document.getElementById("kui-loupe");
-            if (!el || !lens || !el.children.length) return;
-            lensSetup();
-            var n = el.children.length;
-            if (!trackRect || !barLefts || barLefts.length !== n) {   // one layout read per hover, not per frame
-                trackRect = el.getBoundingClientRect();
-                barLefts = Array.prototype.map.call(el.children, function (b) { return b.getBoundingClientRect().left - trackRect.left; });
-            }
+            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
+            if (!el || !el.children.length) return;
+            var bars = el.children, n = bars.length;
+            if (!trackRect || !barLefts || barLefts.length !== n) measureTrack(el);
+            el.classList.remove("settling");
             var x = Math.max(0, Math.min(trackRect.width - 0.01, trackX - trackRect.left));
-            var lo = 0, hi = n - 1;                                      // last bar whose left edge is at or before x
+            var lo = 0, hi = n - 1;                                   // bar under the pointer (unmagnified layout)
             while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (barLefts[mid] <= x) lo = mid; else hi = mid - 1; }
-            var hot = lo, cells = self.layerCells();
+            var hot = lo, pitch = n > 1 ? barLefts[1] - barLefts[0] : trackRect.width;
+            var sigma = Math.max(2.2, Math.min(6, n / 34)) * pitch, AMP = Math.min(5, Math.max(2.5, 12 / Math.max(pitch, 0.5)));
+            // magnified pitch of every bar, cumulative position, and the shift that pins the hovered point
+            var sc = new Array(n), left = new Array(n), acc = 0;
+            for (var i = 0; i < n; i++) {
+                var c = barLefts[i] + pitch / 2, d = (c - x) / sigma, g = Math.exp(-d * d / 2);
+                sc[i] = 1 + AMP * g; left[i] = acc; acc += pitch * sc[i];
+            }
+            // pin the pointer onto the bar itself (a pointer in the 1 px gap counts as the bar's right edge)
+            var bw = barW || pitch, frac = Math.max(0, Math.min(1, (x - barLefts[hot]) / bw));
+            var shift = x - (left[hot] + frac * bw * sc[hot]);
+            for (var j = 0; j < n; j++) {
+                var dx = left[j] + shift - barLefts[j], sy = 1 + 0.6 * (sc[j] - 1) / AMP;
+                bars[j].style.transform = "translateX(" + dx.toFixed(2) + "px) scale(" + sc[j].toFixed(3) + "," + sy.toFixed(3) + ")";
+            }
             if (hot !== lastHot) {
-                if (lastHot >= 0 && el.children[lastHot]) el.children[lastHot].classList.remove("hot");
-                if (el.children[hot]) el.children[hot].classList.add("hot");
-                for (var j = -LENS; j <= LENS; j++) {
-                    var i = hot + j, bar = lensBars[j + LENS];
-                    bar.className = i < 0 || i >= n ? "gone" : (cells[i] ? cells[i].cls : "");
-                }
-                var layer = hot + 1, info = self.layerInfo(layer);
-                tip.innerHTML = "Layer " + num(layer) + (info.length ? " · " + esc(info.join(" · ")) : "");
+                if (lastHot >= 0 && bars[lastHot]) bars[lastHot].classList.remove("hot");
+                bars[hot].classList.add("hot");
+                var info = self.layerInfo(hot + 1);
+                tip.innerHTML = "Layer " + num(hot + 1) + (info.length ? " · " + esc(info.join(" · ")) : "");
                 lastHot = hot;
             }
-            var cx = barLefts[hot] + (hot + 1 < n ? (barLefts[hot + 1] - barLefts[hot]) : (trackRect.width - barLefts[hot])) / 2;
-            lens.style.transform = "translateX(" + cx.toFixed(1) + "px) translateX(-50%)";
-            tip.style.transform = "translateX(" + cx.toFixed(1) + "px) translateX(-50%)";
-            lens.classList.add("show"); tip.classList.add("show");
+            tip.style.transform = "translateX(" + x.toFixed(1) + "px) translateX(-50%)";
+            tip.classList.add("show");
         }
         self.layerCells.subscribe(function () { lastHot = -1; barLefts = null; if (trackHover && !trackFrame) trackFrame = requestAnimationFrame(magnify); });
         $(window).on("resize", function () { trackRect = null; barLefts = null; });
         document.addEventListener("scroll", function () { trackRect = null; }, true);
         self.trackMove = function (d, e) {
-            if (!trackHover) { trackHover = true; trackRect = null; }
+            if (!trackHover) { trackHover = true; trackRect = null; clearTimeout(settleTimer); }
             trackX = (e.originalEvent || e).clientX;
             if (!trackFrame) trackFrame = requestAnimationFrame(magnify);
             return true;
@@ -349,12 +350,15 @@ $(function () {
         self.trackClick = function (layer) { self.pauseAtLayerClick(trackHover && lastHot >= 0 ? lastHot + 1 : layer); };
         self.trackLeave = function () {
             trackHover = false;
-            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip"), lens = document.getElementById("kui-loupe");
+            var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
             if (trackFrame) { cancelAnimationFrame(trackFrame); trackFrame = null; }
-            if (el && lastHot >= 0 && el.children[lastHot]) el.children[lastHot].classList.remove("hot");
-            lastHot = -1;
             if (tip) tip.classList.remove("show");
-            if (lens) lens.classList.remove("show");
+            if (!el) return true;
+            if (lastHot >= 0 && el.children[lastHot]) el.children[lastHot].classList.remove("hot");
+            lastHot = -1;
+            el.classList.add("settling");                              // ease the bars back
+            Array.prototype.forEach.call(el.children, function (b) { b.style.transform = ""; });
+            clearTimeout(settleTimer); settleTimer = setTimeout(function () { el.classList.remove("settling"); }, 260);
             return true;
         };
         self.layerTicks = ko.pureComputed(function () {

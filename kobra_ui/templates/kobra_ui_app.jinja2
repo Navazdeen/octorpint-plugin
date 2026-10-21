@@ -97,7 +97,6 @@
               </div>
               <div class="layerwrap">
                 <div class="laytip" aria-hidden="true" id="kui-laytip"></div>
-                <div class="loupe" aria-hidden="true" id="kui-loupe"></div>
                 <div class="layers" id="kui-layers" aria-label="Layer track" data-bind="foreach: layerCells, css: { off: !layerTracking() }, event: { mousemove: trackMove, mouseleave: trackLeave }">
                   <button data-bind="css: $data.cls, attr: { 'aria-label': $data.title, 'data-layer': $data.layer }, click: function() { $root.trackClick($data.layer) }"></button>
                 </div>

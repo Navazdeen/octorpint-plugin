@@ -19,6 +19,7 @@ Klipper is deployed while a print is running.
 | U11 | Uninstall the Cancelobject plugin (Klipper's [exclude_object] + Orca's EXCLUDE_OBJECT_DEFINE already cover it) | done: uninstalled |
 | U12 | 2D view is a small centred square instead of filling the Live view; resize the canvas to the pane and let the renderer re-fit the bed | deployed + verified |
 | U15 | Magnified layer line lagged behind / drifted from the cursor (slow and fast moves). Rebuilt as a lens over a fixed track: exact bar edges measured once per hover, ~15 lens bars per frame, GPU transform; 58-59 fps headless, lens within 2 px of the cursor | deployed + verified |
+| U16 | Magnifier animation broken after the lens rewrite (no zoom on the bars). Dock effect back on the real bars, transforms only: continuous Gaussian zoom, pointer pinned to its bar (81/81), bars ease back on leave, ~40 fps headless | deployed + verified |
 | U7 | Console shortcut (`) sometimes doesn't work; add a full set of keyboard shortcuts | deployed + verified |
 | U13 | Skip-object dialog for the last object had two "Back" buttons; now an info dialog with one OK | deployed + verified |
 | U14 | Pause-at-layer track empty in preview and for files sliced before layer tracking; layers now read from the G-code file (pre-arm before printing; untracked files show the track with the layer worked out from Z, pausing disabled with a re-slice note) | deployed + verified |
