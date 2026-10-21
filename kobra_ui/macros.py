@@ -178,3 +178,79 @@ def config_outline(files):
             if m:
                 out.append({"file": fname, "section": m.group(1).strip(), "line": i})
     return out
+
+
+COLORS = {"orange", "blue", "green", "red"}
+MAX_PRESETS = 200
+MAX_NAME = 60
+DEFAULT_GROUPS = [
+    ("filament", "Filament", ["LOAD_FILAMENT", "UNLOAD_FILAMENT", "PURGE_FILAMENT", "M600", "DRY_FILAMENT", "STOP_DRYING"]),
+    ("maintenance", "Maintenance", ["CLEAN_NOZZLE", "MESH_CALIBRATE", "PID_HOTEND", "PID_BED", "Z_ENDSTOP_HIT"]),
+    ("motion", "Motion & heat", ["PARK", "PREHEAT", "COOLDOWN"]),
+]
+
+
+def default_deck(macros):
+    names = {m["name"] for m in macros}
+    groups, used = [], set()
+    for gid, gname, items in DEFAULT_GROUPS:
+        present = [n for n in items if n in names]
+        used.update(present)
+        groups.append({"id": gid, "name": gname, "items": present})
+    rest = sorted(m["name"] for m in macros if not m["internal"] and not m["slicer"] and m["name"] not in used)
+    groups.append({"id": "other", "name": "Other", "items": rest})
+    return {"version": 0, "groups": groups, "pinned": [], "hidden": sorted(SLICER_MACROS),
+            "colors": {}, "confirm": [], "presets": {}, "usage": {}}
+
+
+def _entry(item):
+    item = str(item)
+    return item if item.startswith("preset:") else item.upper()
+
+
+def _name(value, what):
+    value = str(value or "").strip()
+    if not value or len(value) > MAX_NAME:
+        raise ValueError("%s: give a name of 1 to %d characters" % (what, MAX_NAME))
+    return value
+
+
+def validate_deck(deck):
+    """A normalised copy of a deck sent by the UI; raises ValueError naming the first problem."""
+    if not isinstance(deck, dict):
+        raise ValueError("The deck must be an object")
+    groups = []
+    for g in deck.get("groups") or []:
+        groups.append({"id": _name(g.get("id"), "Group id"), "name": _name(g.get("name"), "Group name"),
+                       "items": [_entry(i) for i in g.get("items") or []]})
+    colors = {}
+    for key, color in (deck.get("colors") or {}).items():
+        if color not in COLORS:
+            raise ValueError("%s: colour must be one of %s" % (key, ", ".join(sorted(COLORS))))
+        colors[_entry(key)] = color
+    presets = deck.get("presets") or {}
+    if len(presets) > MAX_PRESETS:
+        raise ValueError("Too many presets (at most %d)" % MAX_PRESETS)
+    clean_presets = {}
+    for pid, p in presets.items():
+        params = {}
+        for k, v in (p.get("params") or {}).items():
+            v = str(v).strip()
+            if v:
+                check_value(str(k).upper(), v)
+                params[str(k).upper()] = v
+        clean_presets[_name(pid, "Preset id")] = {"name": _name(p.get("name"), "Preset name"),
+                                                  "macro": str(p.get("macro") or "").upper(), "params": params}
+    usage = {}
+    for k, v in (deck.get("usage") or {}).items():
+        usage[_entry(k)] = int(v) if isinstance(v, (int, float)) and v >= 0 else 0
+    return {
+        "version": int(deck.get("version") or 0),
+        "groups": groups,
+        "pinned": [_entry(i) for i in deck.get("pinned") or []],
+        "hidden": [_entry(i) for i in deck.get("hidden") or []],
+        "colors": colors,
+        "confirm": [_entry(i) for i in deck.get("confirm") or []],
+        "presets": clean_presets,
+        "usage": usage,
+    }

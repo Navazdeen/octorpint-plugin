@@ -1,6 +1,6 @@
 import pytest
 
-from macros import build_script, config_outline, parse_macros
+from macros import build_script, config_outline, default_deck, parse_macros, validate_deck
 from tests.conftest import load_fixture
 
 FIX = load_fixture()
@@ -92,3 +92,36 @@ def test_config_outline():
     assert {"file": "macros.cfg", "section": "gcode_macro PARK", "line": 2} in out
     assert {"file": "printer.cfg", "section": "printer", "line": 1} in out
     assert not any(o["section"].startswith("bed_mesh") for o in out)  # SAVE_CONFIG block skipped
+
+
+def test_default_deck_groups():
+    d = default_deck(MS)
+    g = {x["id"]: x["items"] for x in d["groups"]}
+    assert g["filament"][:3] == ["LOAD_FILAMENT", "UNLOAD_FILAMENT", "PURGE_FILAMENT"]
+    assert {"CLEAN_NOZZLE", "MESH_CALIBRATE", "PID_HOTEND", "PID_BED"} <= set(g["maintenance"])
+    assert {"PARK", "PREHEAT", "COOLDOWN"} <= set(g["motion"])
+    assert not any(i.startswith("_") for items in g.values() for i in items)
+    assert set(d["hidden"]) == {"START_PRINT", "PRINT_END", "SET_PRINT_STATS_INFO"}
+    assert d["pinned"] == [] and d["presets"] == {} and d["version"] == 0
+
+
+def test_validate_deck_normalises_case_and_rejects():
+    d = default_deck(MS)
+    d["pinned"] = ["park"]
+    d["colors"] = {"park": "orange"}
+    v = validate_deck(d)
+    assert v["pinned"] == ["PARK"] and v["colors"] == {"PARK": "orange"}  # Review Focus 1
+    for bad in ({**d, "colors": {"PARK": "pink"}},
+                {**d, "presets": {str(i): {"name": "p", "macro": "PARK", "params": {}} for i in range(201)}},
+                {**d, "presets": {"p1": {"name": "x" * 61, "macro": "PARK", "params": {}}}},
+                {**d, "presets": {"p1": {"name": "x", "macro": "PARK", "params": {"X": "1;M112"}}}}):
+        with pytest.raises(ValueError):
+            validate_deck(bad)
+
+
+def test_validate_deck_keeps_missing_macros():  # Review Focus 3: kept, not dropped
+    d = default_deck(MS)
+    d["presets"] = {"p1": {"name": "Old", "macro": "GONE_MACRO", "params": {}}}
+    d["groups"][0]["items"].append("preset:p1")
+    v = validate_deck(d)
+    assert v["presets"]["p1"]["macro"] == "GONE_MACRO" and "preset:p1" in v["groups"][0]["items"]
