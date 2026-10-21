@@ -134,11 +134,18 @@ window.KobraDeck = function (self, h) {
             var start = keepValues && prev[p.name] !== undefined ? prev[p.name] : (t.preset && t.preset.params[p.name] !== undefined ? t.preset.params[p.name] : "");
             var f = { name: p.name, kind: p.kind, choices: p.choices || [], value: ko.observable(start),
                       placeholder: displayDefault(p), hint: paramHint(p) };
-            f.err = ko.pureComputed(function () { var v = String(f.value() || "").trim(); return v && !VALUE_RE.test(v) ? "Use a number or a single word (letters, digits, . _ + -)" : ""; });
+            f.err = ko.pureComputed(function () { return valueError(p, f.value()); });
             return f;
         }));
         return true;
     };
+    // same rules as the plugin's build_script: numbers for number parameters, otherwise one plain word
+    function valueError(p, value) {
+        var v = String(value || "").trim();
+        if (!v) return "";
+        if (p.kind === "number" && !/^-?\d+(\.\d+)?$/.test(v)) return "Use a number, like 40 or 2.5";
+        return VALUE_RE.test(v) ? "" : "Use a number or a single word (letters, digits, . _ + -)";
+    }
     function paramHint(p) {
         if (p.source) return "From " + p.source;
         if (p.name === "TEMP" && (p.default === null || Number(p.default) === 0)) return "Blank uses the paused print's temperature, or your filament default";
@@ -359,6 +366,166 @@ window.KobraDeck = function (self, h) {
     document.addEventListener("pointerup", onUp);
     document.addEventListener("pointercancel", onUp);
     $(document).on("keydown.kuideck", function (e) { if (e.key === "Escape" && self.deckEdit() && !self.openMenu()) self.deckEdit(false); });
+
+    /* ------------------------------ palette ------------------------------ */
+    // case-insensitive subsequence match: +10 per char, +15 at a word start, +5 when consecutive, -1 per skipped char
+    self.fuzzyScore = function (q, text) {
+        q = String(q || "").toLowerCase(); text = String(text || "");
+        var low = text.toLowerCase(), score = 0, hits = [], at = 0, last = -2;
+        if (!q) return { score: 0, hits: [] };
+        for (var i = 0; i < q.length; i++) {
+            var j = low.indexOf(q.charAt(i), at);
+            if (j < 0) return null;
+            score += 10 - (j - at);
+            if (j === 0 || /[_ \/.\-]/.test(text.charAt(j - 1))) score += 15;
+            if (j === last + 1) score += 5;
+            hits.push(j); last = j; at = j + 1;
+        }
+        return { score: score, hits: hits };
+    };
+    function marked(text, hits) {
+        var out = "", set = {}; (hits || []).forEach(function (i) { set[i] = 1; });
+        for (var i = 0; i < text.length; i++) out += set[i] ? "<mark>" + h.esc(text.charAt(i)) + "</mark>" : h.esc(text.charAt(i));
+        return out;
+    }
+    var VIEWS = [["printer", "Printer", "fa-print"], ["macros", "Macros", "fa-table-cells-large"], ["files", "Files", "fa-folder-open"],
+                 ["mesh", "Bed mesh", "fa-chart-area"], ["klipper", "Klipper", "fa-microchip"]];
+    self.paletteOpen = ko.observable(false);
+    self.paletteQuery = ko.observable("");
+    self.paletteIndex = ko.observable(0);
+    self.paletteExpanded = ko.observable(null);
+    self.paletteFields = ko.observableArray([]);
+    self.paletteOutline = ko.observableArray([]);
+    self.paletteSettings = ko.observableArray([]);   // read once per open: live Klipper updates must not reshuffle the rows
+    var paletteReturn = null;
+
+    function settingRows() {
+        var st = ((h.k("configfile", "settings", {}) || {})["gcode_macro _printer_settings"]) || {};
+        return Object.keys(st).filter(function (k) { return k.indexOf("variable_") === 0; }).map(function (k) {
+            var name = k.slice(9); return { name: name, value: String(st[k]).replace(/^'(.*)'$/, "$1") };
+        });
+    }
+    self.paletteRows = ko.pureComputed(function () {
+        var q = self.paletteQuery(), d = self.deck(), rows = [];
+        if (!self.paletteOpen()) return rows;
+        if (q.charAt(0) === ">") {
+            var cmd = q.slice(1).trim();
+            return cmd ? [{ group: "run", kind: "raw", icon: "fa-terminal", html: h.esc(cmd), sub: "Send raw G-code", key: "raw", cmd: cmd }] : [];
+        }
+        var usage = d ? d.usage : {}, run = [], go = [];
+        function add(list, row, text) {
+            var m = self.fuzzyScore(q, text); if (!m) return;
+            row.score = m.score + Math.min(8, usage[row.key] || 0); row.hits = m.hits; list.push(row);
+        }
+        if (d) {
+            self.macros().forEach(function (m) {
+                if (m.internal) return;
+                var t = self.tileModel(m.name, "");
+                add(run, { group: "run", kind: "macro", key: m.name, icon: t.icon, title: m.name, mono: true, tile: t,
+                           sub: firstLine(m.description), right: (t.pinned ? "pinned" : "") }, m.name);
+            });
+            Object.keys(d.presets).forEach(function (id) {
+                var t = self.tileModel("preset:" + id, "");
+                add(run, { group: "run", kind: "preset", key: t.key, icon: "fa-bookmark", title: t.label, tile: t,
+                           sub: "preset · " + t.chips.map(function (c) { return c.k + " " + c.v; }).join(", "), right: t.pinned ? "pinned" : "" }, t.label);
+            });
+        }
+        self.paletteOutline().forEach(function (o) {
+            add(go, { group: "goto", kind: "section", key: "s:" + o.file + ":" + o.line, icon: "fa-file-lines", title: o.section, sub: o.file, right: "line " + o.line, file: o.file, line: o.line }, o.section);
+        });
+        self.paletteSettings().forEach(function (v) {
+            add(go, { group: "goto", kind: "setting", key: "v:" + v.name, icon: "fa-sliders", title: v.name, mono: true, sub: "_PRINTER_SETTINGS = " + v.value, right: "setting", name: v.name }, v.name);
+        });
+        (self.allFiles ? self.allFiles() : []).forEach(function (f) {
+            add(go, { group: "goto", kind: "file", key: "f:" + f.path, icon: "fa-file", title: f.name || f.path, sub: f.path, right: "file", path: f.path }, f.name || f.path);
+        });
+        VIEWS.forEach(function (v) { add(go, { group: "goto", kind: "view", key: "view:" + v[0], icon: v[2], title: v[1], sub: "", right: "view", route: v[0] }, v[1]); });
+        function top(list) { return list.sort(function (a, b) { return b.score - a.score || a.title.localeCompare(b.title); }).slice(0, 8); }
+        run = top(run); go = top(go);
+        run.concat(go).forEach(function (r) { r.html = marked(r.title, r.hits); });
+        return run.concat(go);
+    });
+    self.paletteGroups = ko.pureComputed(function () {
+        var rows = self.paletteRows(), out = [];
+        [["run", "Run"], ["goto", "Go to"]].forEach(function (g) {
+            var list = []; rows.forEach(function (r, i) { if (r.group === g[0]) { r.index = i; list.push(r); } });
+            if (list.length) out.push({ name: g[1], rows: list });
+        });
+        return out;
+    });
+    self.paletteQuery.subscribe(function () { self.paletteIndex(0); self.paletteExpanded(null); });
+
+    self.openPalette = function () {
+        if (self.paletteOpen()) { $("#kui-pal-q").trigger("focus"); return; }
+        paletteReturn = document.activeElement;
+        self.paletteSettings(settingRows());
+        self.paletteQuery(""); self.paletteExpanded(null); self.paletteOpen(true);
+        // focus now, not on the next tick: keys typed right after Ctrl+K must land in the box, never on the page shortcuts
+        var q = document.getElementById("kui-pal-q"); if (q) q.focus();
+        OctoPrint.get("plugin/" + PLUGIN + "/config/outline").done(function (r) { self.paletteOutline(r || []); });
+    };
+    self.closePalette = function (keepFocus) {
+        self.paletteOpen(false); self.paletteExpanded(null);
+        if (!keepFocus && paletteReturn && paletteReturn.focus && document.contains(paletteReturn)) paletteReturn.focus();
+        paletteReturn = null;
+    };
+    function expand(row) {
+        if (!row || !row.tile) return false;
+        var m = self.macroMap()[row.tile.macro]; if (!m || !m.params.length) return false;
+        self.paletteExpanded(row.key);
+        self.paletteFields(m.params.map(function (p) {
+            var f = { name: p.name, value: ko.observable(row.tile.preset && row.tile.preset.params[p.name] || ""), placeholder: displayDefault(p) };
+            f.err = ko.pureComputed(function () { return valueError(p, f.value()); });
+            return f;
+        }));
+        setTimeout(function () { $("#kui-palette .pfields input").first().trigger("focus"); }, 0);
+        return true;
+    }
+    function fieldValues() {
+        var out = {}; self.paletteFields().forEach(function (f) { var v = String(f.value() || "").trim(); if (v) out[f.name] = v; }); return out;
+    }
+    self.paletteActivate = function (row) {
+        row = row || self.paletteRows()[self.paletteIndex()];
+        if (!row) return;
+        if (row.kind === "macro" || row.kind === "preset") {
+            var expanded = self.paletteExpanded() === row.key;
+            if (expanded && self.paletteFields().some(function (f) { return !!f.err(); })) return;
+            var params = expanded ? fieldValues() : (row.tile.preset ? row.tile.preset.params : {});
+            self.closePalette(); self.runTile(row.tile, params);
+        } else if (row.kind === "raw") { self.closePalette(); self.gcode(row.cmd); }
+        else if (row.kind === "section") { self.closePalette(true); self.editorGoto(row.file, row.line); }
+        else if (row.kind === "setting") {
+            var sec = self.paletteOutline().filter(function (o) { return o.section.toLowerCase() === "gcode_macro _printer_settings"; })[0];
+            if (!sec) { self.closePalette(); return; }
+            OctoPrint.get("plugin/" + PLUGIN + "/config/" + encodeURIComponent(sec.file)).done(function (r) {
+                var lines = (r.content || "").split("\n"), line = sec.line;
+                for (var i = sec.line; i < lines.length; i++) if (lines[i].indexOf("variable_" + row.name) === 0) { line = i + 1; break; }
+                self.closePalette(true); self.editorGoto(sec.file, line);
+            });
+        } else if (row.kind === "file") { self.closePalette(true); self.fileQuery(row.title); self.go("files"); }
+        else if (row.kind === "view") { self.closePalette(true); self.go(row.route); }
+    };
+    self.paletteKey = function (d, e) {
+        var n = self.paletteRows().length, i = self.paletteIndex();
+        if (e.key === "ArrowDown") { self.paletteIndex(Math.min(n - 1, i + 1)); return false; }
+        if (e.key === "ArrowUp") { self.paletteIndex(Math.max(0, i - 1)); return false; }
+        if (e.key === "Enter") { self.paletteActivate(); return false; }
+        if (e.key === "Tab") { expand(self.paletteRows()[i]); return false; }
+        if (e.key === "Escape") { if (self.paletteExpanded()) self.paletteExpanded(null); else self.closePalette(); return false; }
+        return true;
+    };
+    self.paletteFieldKey = function (d, e) {
+        if (e.key === "Enter") { self.paletteActivate(); return false; }
+        if (e.key === "Escape") { self.paletteExpanded(null); $("#kui-pal-q").trigger("focus"); return false; }
+        return true;
+    };
+    self.paletteHover = function (row) { self.paletteIndex(row.index); return true; };
+    self.paletteRowClick = function (row) { self.paletteIndex(row.index); self.paletteActivate(row); };
+    self.paletteBackdrop = function (d, e) { if (e.target === e.currentTarget) self.closePalette(); return true; };
+    // keep the highlighted row in view
+    self.paletteIndex.subscribe(function (i) {
+        setTimeout(function () { var r = document.querySelector('#kui-palette .prow[data-index="' + i + '"]'); if (r && r.scrollIntoView) r.scrollIntoView({ block: "nearest" }); }, 0);
+    });
 
     /* ------------------------------ motion ------------------------------ */
     // FLIP: measure keyed children, change the DOM, then play each from where it was

@@ -1170,7 +1170,8 @@ $(function () {
             { title: "Anywhere", keys: [
                 { k: ["`"], d: "Open or close the console" }, { k: ["?"], d: "Show these shortcuts" },
                 { k: ["1"], d: "Printer" }, { k: ["2"], d: "Files" }, { k: ["3"], d: "Mesh" }, { k: ["4"], d: "Klipper" },
-                { k: ["/"], d: "Search files" }, { k: ["Esc"], d: "Close a dialog, menu or the console" },
+                { k: ["Ctrl", "K"], d: "Search and run anything" }, { k: ["/"], d: "Search and run anything" },
+                { k: ["Esc"], d: "Close a dialog, menu or the console" },
                 { k: ["Ctrl", "Shift", "E"], d: "Emergency stop" } ] },
             { title: "Printing", keys: [
                 { k: ["Shift", "P"], d: "Pause or resume" }, { k: ["Shift", "M"], d: "Change filament now (M600)" },
@@ -1192,11 +1193,18 @@ $(function () {
             if (!$("html").hasClass("kui-on") || $(".modal.in:visible").length) return;
             var e = ev.originalEvent || ev, key = e.key, tag = (e.target.tagName || "").toLowerCase();
             var typing = tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable;
+            if (self.paletteOpen && self.paletteOpen()) {
+                // the palette owns the keyboard while it is open
+                if (key === "Escape") { self.closePalette(); return false; }
+                if ((e.ctrlKey || e.metaKey) && key.toLowerCase() === "k") { self.openPalette(); return false; }
+                return true;
+            }
             if (key === "Escape") {
                 if (self.keysVisible()) { self.keysVisible(false); return false; }
                 return self.onKeyDown(null, e);
             }
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && key.toLowerCase() === "e") { self.emergencyStop(); return false; }
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && key.toLowerCase() === "k" && self.openPalette) { self.openPalette(); return false; }
             if (self.route() === "editor" && (e.ctrlKey || e.metaKey) && e.shiftKey && key.toLowerCase() === "s") { self.saveConfig(true); return false; }
             if (typing || e.ctrlKey && key.toLowerCase() !== "a" || e.metaKey || e.altKey) {
                 if (key === "`" && e.target.id === "kui-cmd" && !self.cmdText()) { self.dockOpen(false); $(e.target).trigger("blur"); return false; }
@@ -1211,7 +1219,7 @@ $(function () {
                 case "2": self.go("files"); return false;
                 case "3": self.go("mesh"); return false;
                 case "4": self.go("klipper"); return false;
-                case "/": self.go("files"); setTimeout(function () { $("#kui .search input").trigger("focus"); }, 30); return false;
+                case "/": if (self.openPalette) { self.openPalette(); return false; } return true;
                 case "v": var modes = ["webcam", "3d", "2d"]; self.setViewMode(modes[(modes.indexOf(self.viewMode()) + 1) % 3]); return false;
                 case "S-p": if (self.isPaused()) self.resumePrint(); else if (self.isPrinting()) self.pausePrint(); return false;
                 case "S-m": if (self.isPrinting()) self.gcode("M600"); return false;

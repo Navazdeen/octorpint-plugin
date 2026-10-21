@@ -628,3 +628,25 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .lbl3 .renamable { cursor: text; border-bottom: 1px dashed #4a4a50; }
 #kui .newgroup { margin-top: 16px; height: 56px; border-radius: 8px; border: 1px dashed #4a4a50; display: flex; gap: 10px; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; transition: border-color .15s, color .15s, background-color .15s; }
 #kui .newgroup.over { border-color: var(--accent); color: var(--text); background: #1d1915; }
+
+/* ---------- Ctrl+K palette ---------- */
+#kui .palscrim { position: fixed; inset: 0; z-index: 60; background: rgba(10,10,12,.55); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; }
+#kui .palette { width: min(640px, 100%); max-height: 70vh; display: flex; flex-direction: column; background: var(--raised); border-radius: 12px; box-shadow: 0 30px 80px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06); overflow: hidden; }
+#kui .palette .pq { display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 52px; border-bottom: 1px solid #2c2b30; color: var(--muted); flex: none; }
+#kui .palette .pq input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: var(--text); font-size: 15px; outline: none; box-shadow: none; padding: 0; }
+#kui .palette .pq input::placeholder { color: #6b6a72; }
+#kui .kbdk { font: 11px var(--mono); border: 1px solid var(--control); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--muted); }
+#kui .palette .plist { overflow-y: auto; overscroll-behavior: contain; padding: 4px 8px; }
+#kui .palette .ph { color: var(--muted); font-size: 11px; padding: 10px 8px 6px; }
+#kui .palette .prow { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+#kui .palette .prow > i { color: var(--muted); text-align: center; }
+#kui .palette .prow.on { background: #2c2b30; }
+#kui .palette .prow.on > i { color: var(--text); }
+#kui .palette .prow .pt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#kui .palette .prow mark { background: none; color: var(--accent-ink); padding: 0; }
+#kui .palette .prow .ps, #kui .palette .prow .pr { color: var(--muted); font-size: 12px; }
+#kui .palette .pfields { display: grid; gap: 10px; padding: 6px 8px 10px 40px; }
+#kui .palette .pempty { color: var(--muted); padding: 18px 16px; margin: 0; }
+#kui .palette .pfoot { display: flex; gap: 16px; padding: 9px 16px; border-top: 1px solid #2c2b30; color: var(--muted); font-size: 12px; flex: none; }
+#kui .palette .pfoot .pfr { margin-left: auto; }
+@media (max-width: 760px) { #kui .palette .pfoot span:not(:first-child), #kui .palette .prow .pr { display: none; } #kui .palscrim { padding-top: 8vh; } }

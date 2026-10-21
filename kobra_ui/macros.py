@@ -162,6 +162,9 @@ def build_script(macros, name, params):
         if value is None or str(value).strip() == "":
             continue
         value = str(value).strip()
+        kind = next(p["kind"] for p in macro["params"] if p["name"] == key)
+        if kind == "number" and not _NUMBER.match(value):
+            raise ValueError("%s: use a number, like 40 or 2.5" % key)
         check_value(key, value)
         parts.append("%s=%s" % (key, value))
     return " ".join(parts)

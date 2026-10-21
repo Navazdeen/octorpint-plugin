@@ -724,6 +724,38 @@
 
   <button class="totop" type="button" data-bind="visible: showTop(), click: scrollTop"><i class="fa-solid fa-arrow-up"></i>Back to top</button>
   <div class="dropzone" data-bind="visible: dropping()"><span><i class="fa-solid fa-upload"></i> Drop .gcode files to upload</span></div>
+  <div class="palscrim" data-bind="visible: paletteOpen(), click: paletteBackdrop, css: { open: paletteOpen() }">
+    <div class="palette" id="kui-palette" role="dialog" aria-modal="true" aria-label="Search and run">
+      <div class="pq"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="kui-pal-q" autocomplete="off" spellcheck="false" placeholder="Search macros, config, files… or > for G-code" role="combobox" aria-controls="kui-pal-list" aria-expanded="true"
+               data-bind="textInput: paletteQuery, event: { keydown: paletteKey }, keydownBubble: false">
+        <span class="kbdk">Esc</span></div>
+      <div class="plist" id="kui-pal-list" role="listbox" data-bind="foreach: paletteGroups">
+        <div class="pgroup">
+          <div class="ph" data-bind="text: name"></div>
+          <!-- ko foreach: rows -->
+          <div class="prow" role="option" data-bind="attr: { 'data-group': group, 'data-index': index, 'data-line': $data.line || null, 'aria-selected': $root.paletteIndex() === index ? 'true' : 'false' }, css: { on: $root.paletteIndex() === index }, event: { mousemove: $root.paletteHover }, click: $root.paletteRowClick">
+            <i class="fa-solid" aria-hidden="true" data-bind="css: icon"></i>
+            <span class="pt"><span data-bind="html: html, css: { num: !!$data.mono }"></span> <span class="ps" data-bind="text: $data.sub || ''"></span></span>
+            <span class="pr" data-bind="text: $data.right || ''"></span>
+          </div>
+          <!-- ko if: $root.paletteExpanded() === key -->
+          <div class="pfields" data-bind="foreach: $root.paletteFields">
+            <div class="pfield" data-bind="attr: { 'data-pparam': name }">
+              <label class="fk num" data-bind="text: name, attr: { for: 'kui-pp-' + name }"></label>
+              <input class="finp num" autocomplete="off" spellcheck="false" data-bind="textInput: value, attr: { id: 'kui-pp-' + name, placeholder: placeholder }, css: { bad: err() }, event: { keydown: $root.paletteFieldKey }, keydownBubble: false">
+              <span class="ferr" data-bind="attr: { hidden: !err() }, text: err()"></span>
+            </div>
+          </div>
+          <!-- /ko -->
+          <!-- /ko -->
+        </div>
+      </div>
+      <p class="pempty" data-bind="visible: !paletteRows().length">Nothing matches. Start with &gt; to send it as G-code.</p>
+      <div class="pfoot"><span><span class="kbdk">↑↓</span> move</span><span><span class="kbdk">Enter</span> run or open</span><span><span class="kbdk">Tab</span> parameters</span><span class="pfr">&gt; sends raw G-code</span></div>
+    </div>
+  </div>
+
   <div class="toasts" role="status" aria-live="polite" data-bind="foreach: toasts">
     <div class="toast" data-bind="css: kind() + (leaving() ? ' leaving' : ''), event: { mouseenter: $root.toastHold, mouseleave: $root.toastRelease }">
       <span class="ti" aria-hidden="true"><!-- ko if: kind() === 'busy' --><span class="spin"></span><!-- /ko --><!-- ko ifnot: kind() === 'busy' --><i class="fa-solid" data-bind="css: $root.toastIcon($data)"></i><!-- /ko --></span>

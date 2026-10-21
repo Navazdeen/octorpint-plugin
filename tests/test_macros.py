@@ -129,3 +129,14 @@ def test_validate_deck_keeps_missing_macros():  # Review Focus 3: kept, not drop
 
 def test_klipper_placeholder_description_is_empty():
     assert by_name()["Z_ENDSTOP_HIT"]["description"] == ""  # Klipper fills in "G-Code macro"
+
+
+@pytest.mark.parametrize("bad", ["5x", "abc", "1.2.3", "--1"])
+def test_number_params_need_numbers(bad):  # spec §1: values are checked against the type worked out from the default
+    with pytest.raises(ValueError, match="LENGTH: use a number"):
+        build_script(MS, "PURGE_FILAMENT", {"LENGTH": bad})
+
+
+def test_number_params_accept_numbers():
+    assert build_script(MS, "PURGE_FILAMENT", {"LENGTH": "-2.5"}) == "PURGE_FILAMENT LENGTH=-2.5"
+    assert build_script(MS, "PREHEAT", {"MATERIAL": "PETG"}) == "PREHEAT MATERIAL=PETG"
