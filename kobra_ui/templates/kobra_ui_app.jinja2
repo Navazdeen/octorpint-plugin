@@ -276,6 +276,7 @@
         <div class="view">
           <div class="deckwrap">
             <section class="card deckcard" aria-labelledby="kui-h-deck">
+              <span class="selring" aria-hidden="true" data-bind="visible: !deckEdit()"></span>
               <h2 id="kui-h-deck">Deck <span class="aside">
                 <span class="seg" role="group" aria-label="Order">
                   <button data-bind="attr: { 'aria-pressed': deckView() === 'groups' ? 'true' : 'false' }, click: function () { setDeckView('groups') }">Groups</button>
@@ -285,49 +286,51 @@
                 <button class="kb sm" id="kui-deck-edit" data-bind="visible: canEditDeck(), css: { accent: deckEdit() }, click: toggleDeckEdit"><i class="fa-solid" data-bind="css: deckEdit() ? 'fa-check' : 'fa-pen'"></i><span data-bind="text: deckEdit() ? 'Done' : 'Edit deck'"></span></button>
               </span></h2>
               <p class="empty" data-bind="visible: !deckLoaded()">Reading macros from Klipper…</p>
-              <div id="kui-deck" data-bind="css: { editing: deckEdit() }, foreach: deckSections">
-                <div class="dgroup" data-bind="attr: { 'data-group': id }">
-                  <div class="lbl3"><span data-bind="text: name, click: $root.renameGroup, css: { renamable: $root.deckEdit() && id !== 'all' }"></span><span class="line"></span></div>
-                  <div class="deck" data-bind="foreach: tiles">
-                    <div tabindex="0" role="button" data-bind="attr: { class: $root.tileClass($data), 'data-name': key, 'data-flip': key, 'aria-pressed': $root.selMacro() === key ? 'true' : 'false', 'aria-label': label }, click: $root.tileClick, event: { dblclick: $root.tileDblClick, keydown: $root.tileKey }">
-                      <span class="grip" aria-hidden="true"><i class="fa-solid fa-grip-vertical"></i></span>
-                      <span class="ic" aria-hidden="true"><i class="fa-solid" data-bind="css: icon"></i></span>
-                      <span class="n" data-bind="text: label, css: { num: !preset }"></span>
-                      <span class="pinmark" aria-hidden="true"><i class="fa-solid fa-thumbtack" data-bind="visible: pinned"></i></span>
-                      <span class="d" data-bind="text: missing ? 'Missing: not in the Klipper config' : desc"></span>
-                      <span class="chips" data-bind="foreach: chips"><span class="chip num"><b data-bind="text: k"></b> <span data-bind="text: v"></span></span></span>
-                      <span class="pop tpop" data-bind="visible: $root.deckEdit()">
-                        <button class="iconbtn sm tmenu-btn" aria-label="Tile options" data-bind="click: $root.tileMenu, clickBubble: false, attr: { 'aria-expanded': $root.tileMenuOpen($data) ? 'true' : 'false' }"><i class="fa-solid fa-ellipsis"></i></button>
-                        <div class="menu tmenu" role="menu" data-bind="visible: $root.tileMenuOpen($data), click: function () { return true; }, clickBubble: false">
-                          <button role="menuitem" data-bind="click: $root.tilePin"><i class="fa-solid fa-thumbtack"></i><span data-bind="text: pinned ? 'Remove from Printer screen' : 'Pin to Printer screen'"></span></button>
-                          <button role="menuitem" data-bind="click: $root.tileHide"><i class="fa-solid" data-bind="css: hidden ? 'fa-eye' : 'fa-eye-slash'"></i><span data-bind="text: hidden ? 'Show' : 'Hide'"></span></button>
-                          <button role="menuitem" data-bind="click: $root.tileConfirm"><i class="fa-solid fa-circle-exclamation"></i><span data-bind="text: confirm ? 'Run without asking' : 'Always ask first'"></span></button>
-                          <div class="swatches" role="group" aria-label="Colour">
-                            <button class="sw" aria-label="No colour" data-bind="click: function () { $root.tileColor($data, '') }, css: { on: !color }"></button>
-                            <button class="sw c-orange" aria-label="Orange" data-bind="click: function () { $root.tileColor($data, 'orange') }, css: { on: color === 'orange' }"></button>
-                            <button class="sw c-blue" aria-label="Blue" data-bind="click: function () { $root.tileColor($data, 'blue') }, css: { on: color === 'blue' }"></button>
-                            <button class="sw c-green" aria-label="Green" data-bind="click: function () { $root.tileColor($data, 'green') }, css: { on: color === 'green' }"></button>
-                            <button class="sw c-red" aria-label="Red" data-bind="click: function () { $root.tileColor($data, 'red') }, css: { on: color === 'red' }"></button>
-                          </div>
-                          <!-- ko if: preset -->
-                          <button role="menuitem" data-bind="click: $root.tileRename"><i class="fa-solid fa-pen"></i>Rename</button>
-                          <button role="menuitem" class="danger" data-bind="click: $root.tileDelete"><i class="fa-regular fa-trash-can"></i>Delete</button>
-                          <!-- /ko -->
-                        </div>
-                      </span>
-                      <span class="flags" aria-hidden="true">
-                        <i class="fa-solid fa-fire" title="Heats" data-bind="visible: $root.hasHint($data, 'heats')"></i>
-                        <i class="fa-solid fa-house" title="Homes" data-bind="visible: $root.hasHint($data, 'homes')"></i>
-                        <i class="fa-solid fa-circle-exclamation" title="Asks first" data-bind="visible: confirm || $root.hasHint($data, 'restarts')"></i>
-                      </span>
+              <div id="kui-deck" class="deck" data-bind="css: { editing: deckEdit() }, foreach: deckItems">
+                <!-- ko if: $data.isLabel -->
+                <div class="lbl3" data-bind="attr: { 'data-group': id, 'data-flip': key }"><span data-bind="text: name, click: $root.renameGroup, css: { renamable: $root.deckEdit() && id !== 'all' }"></span><span class="line"></span></div>
+                <!-- /ko -->
+                <!-- ko ifnot: $data.isLabel -->
+                <div tabindex="0" role="button" data-bind="attr: { class: $root.tileClass($data), 'data-name': key, 'data-flip': key, 'aria-pressed': $root.selMacro() === key ? 'true' : 'false', 'aria-label': label }, click: $root.tileClick, event: { dblclick: $root.tileDblClick, keydown: $root.tileKey }">
+                  <span class="grip" aria-hidden="true"><i class="fa-solid fa-grip-vertical"></i></span>
+                  <span class="ic" aria-hidden="true"><i class="fa-solid" data-bind="css: icon"></i></span>
+                  <span class="n" data-bind="text: label, css: { num: !preset }"></span>
+                  <span class="pinmark" aria-hidden="true"><i class="fa-solid fa-thumbtack" data-bind="visible: pinned"></i></span>
+                  <span class="d" data-bind="text: missing ? 'Missing: not in the Klipper config' : desc"></span>
+                  <span class="chips" data-bind="foreach: chips"><span class="chip num"><b data-bind="text: k"></b> <span data-bind="text: v"></span></span></span>
+                  <!-- ko if: $root.deckEdit() -->
+                  <span class="pop tpop">
+                    <button class="iconbtn sm tmenu-btn" aria-label="Tile options" data-bind="click: $root.tileMenu, clickBubble: false, attr: { 'aria-expanded': $root.tileMenuOpen($data) ? 'true' : 'false' }"><i class="fa-solid fa-ellipsis"></i></button>
+                    <div class="menu tmenu" role="menu" data-bind="visible: $root.tileMenuOpen($data), click: function () { return true; }, clickBubble: false">
+                      <button role="menuitem" data-bind="click: $root.tilePin"><i class="fa-solid fa-thumbtack"></i><span data-bind="text: pinned ? 'Remove from Printer screen' : 'Pin to Printer screen'"></span></button>
+                      <button role="menuitem" data-bind="click: $root.tileHide"><i class="fa-solid" data-bind="css: hidden ? 'fa-eye' : 'fa-eye-slash'"></i><span data-bind="text: hidden ? 'Show' : 'Hide'"></span></button>
+                      <button role="menuitem" data-bind="click: $root.tileConfirm"><i class="fa-solid fa-circle-exclamation"></i><span data-bind="text: confirm ? 'Run without asking' : 'Always ask first'"></span></button>
+                      <div class="swatches" role="group" aria-label="Colour">
+                        <button class="sw" aria-label="No colour" data-bind="click: function () { $root.tileColor($data, '') }, css: { on: !color }"></button>
+                        <button class="sw c-orange" aria-label="Orange" data-bind="click: function () { $root.tileColor($data, 'orange') }, css: { on: color === 'orange' }"></button>
+                        <button class="sw c-blue" aria-label="Blue" data-bind="click: function () { $root.tileColor($data, 'blue') }, css: { on: color === 'blue' }"></button>
+                        <button class="sw c-green" aria-label="Green" data-bind="click: function () { $root.tileColor($data, 'green') }, css: { on: color === 'green' }"></button>
+                        <button class="sw c-red" aria-label="Red" data-bind="click: function () { $root.tileColor($data, 'red') }, css: { on: color === 'red' }"></button>
+                      </div>
+                      <!-- ko if: preset -->
+                      <button role="menuitem" data-bind="click: $root.tileRename"><i class="fa-solid fa-pen"></i>Rename</button>
+                      <button role="menuitem" class="danger" data-bind="click: $root.tileDelete"><i class="fa-regular fa-trash-can"></i>Delete</button>
+                      <!-- /ko -->
                     </div>
-                  </div>
+                  </span>
+                  <!-- /ko -->
+                  <span class="flags" aria-hidden="true" data-bind="html: $root.flagHtml($data)"></span>
                 </div>
+                <!-- /ko -->
               </div>
               <div class="newgroup" data-bind="visible: deckEdit()"><i class="fa-solid fa-plus"></i>Drop a tile here to start a new group</div>
             </section>
 
-            <section class="card deckpanel" id="kui-deck-panel" aria-live="polite" data-bind="with: selTile">
+            <div class="sheetscrim" data-bind="visible: sheetOpen(), click: closeSheet"></div>
+            <section class="card deckpanel" id="kui-deck-panel" aria-live="polite" data-bind="css: { 'sheet-open': sheetOpen() }">
+              <div class="sheetgrip" aria-hidden="true"><span></span></div>
+              <!-- ko with: selTile -->
+              <div class="pbody">
               <h2><span class="pname" data-bind="text: label, css: { num: !preset }"></span><span class="aside" data-bind="visible: pinned"><i class="fa-solid fa-thumbtack" style="color:var(--accent)"></i>Pinned</span></h2>
               <p class="pdesc" data-bind="text: missing ? macro + ' is not in the Klipper config any more.' : ($root.macroMap()[macro] || {}).description"></p>
               <div class="pform" data-bind="foreach: $root.selParams, visible: $root.selParams().length">
@@ -355,6 +358,8 @@
                 <button class="kb" data-bind="enable: !missing && $root.canEditDeck(), click: $root.savePreset"><i class="fa-regular fa-bookmark"></i>Save as preset</button>
                 <button class="kb sm" data-bind="enable: !missing, click: $root.openMacroSource"><i class="fa-solid fa-code"></i>Open in config</button>
               </div>
+              </div>
+              <!-- /ko -->
             </section>
           </div>
         </div>
@@ -730,7 +735,9 @@
         <input id="kui-pal-q" autocomplete="off" spellcheck="false" placeholder="Search macros, config, files… or > for G-code" role="combobox" aria-controls="kui-pal-list" aria-expanded="true"
                data-bind="textInput: paletteQuery, event: { keydown: paletteKey }, keydownBubble: false">
         <span class="kbdk">Esc</span></div>
-      <div class="plist" id="kui-pal-list" role="listbox" data-bind="foreach: paletteGroups">
+      <div class="plist" id="kui-pal-list" role="listbox">
+        <div class="pbar" aria-hidden="true"></div>
+        <!-- ko foreach: paletteGroups -->
         <div class="pgroup">
           <div class="ph" data-bind="text: name"></div>
           <!-- ko foreach: rows -->
@@ -740,16 +747,17 @@
             <span class="pr" data-bind="text: $data.right || ''"></span>
           </div>
           <!-- ko if: $root.paletteExpanded() === key -->
-          <div class="pfields" data-bind="foreach: $root.paletteFields">
+          <div class="pexpand"><div class="pfields" data-bind="foreach: $root.paletteFields">
             <div class="pfield" data-bind="attr: { 'data-pparam': name }">
               <label class="fk num" data-bind="text: name, attr: { for: 'kui-pp-' + name }"></label>
               <input class="finp num" autocomplete="off" spellcheck="false" data-bind="textInput: value, attr: { id: 'kui-pp-' + name, placeholder: placeholder }, css: { bad: err() }, event: { keydown: $root.paletteFieldKey }, keydownBubble: false">
               <span class="ferr" data-bind="attr: { hidden: !err() }, text: err()"></span>
             </div>
-          </div>
+          </div></div>
           <!-- /ko -->
           <!-- /ko -->
         </div>
+        <!-- /ko -->
       </div>
       <p class="pempty" data-bind="visible: !paletteRows().length">Nothing matches. Start with &gt; to send it as G-code.</p>
       <div class="pfoot"><span><span class="kbdk">↑↓</span> move</span><span><span class="kbdk">Enter</span> run or open</span><span><span class="kbdk">Tab</span> parameters</span><span class="pfr">&gt; sends raw G-code</span></div>

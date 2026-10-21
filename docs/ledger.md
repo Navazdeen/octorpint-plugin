@@ -61,4 +61,18 @@ Klipper is deployed while a print is running.
 | P5 | Page could scroll sideways on phones (OctoPrint's hidden navbar was wider than the screen) | deployed + verified |
 | P6 | Back/forward into printer.cfg before it had loaded showed an empty editor | deployed + verified |
 
+## Macro deck and Ctrl+K palette (2026-10-21, branch macro-deck)
+
+| # | Item | Status |
+|---|---|---|
+| D1 | Macros read from Klipper's live config: parameters, defaults (from _PRINTER_SETTINGS), choices, hints | deployed + verified (pytest 33/33) |
+| D2 | Shared deck on the Cubie (deck.json): versioned saves, 20-version history, corrupt-file fallback, 409 merge | deployed + verified |
+| D3 | run_macro: the plugin builds and checks the command (known macro, known params, numbers for number params) | deployed + verified |
+| D4 | Macros view, parameter panel, Quick macros card on the Printer screen | deployed + verified (deck.js) |
+| D5 | Edit deck: drag reorder, tile menu (pin, hide, colour, ask first, rename/delete presets), Undo, new groups | deployed + verified |
+| D6 | Ctrl+K / "/" palette: macros, presets, config sections, settings, files, views; Tab for parameters; > for raw G-code | deployed + verified |
+| D7 | Motion per the spec table; reduced motion = short fades; phone bottom sheet | deployed + verified |
+| D8 | Whole-UI speed-up: other plugins' root :has() rules (PrettyGCode) restyled ~37k elements on every DOM change; rewritten to attribute flags (style recalc per deck switch 18 → 4 ms) | deployed + verified (PrettyGCode 3D renders) |
+| D9 | INCIDENT during testing: a palette test sent PURGE_FILAMENT LENGTH=5x to the printer (homed, heated to 210 C, purged at the tower). Heater turned off right after. Tests now run behind a network safety net that blocks every command except RESPOND and server-rejected calls | fixed |
+
 Verification: `tools/shot/verify.js` + `probe8.js` (U1, U3–U12 pass; print-only states simulated in the browser only).

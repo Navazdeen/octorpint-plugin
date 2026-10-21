@@ -555,7 +555,8 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .deckwrap { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--gap); align-items: start; }
 #kui .deckpanel { position: sticky; top: calc(var(--topbar, 76px) + 10px); }
 #kui .lbl3 { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin: 18px 0 10px; }
-#kui .dgroup:first-child .lbl3 { margin-top: 0; }
+#kui #kui-deck > .lbl3 { grid-column: 1 / -1; margin: 10px 0 0; }
+#kui #kui-deck > .lbl3:first-child { margin-top: 0; }
 #kui .lbl3 .line { flex: 1; height: 1px; background: var(--rule); }
 #kui .deck { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 10px; }
 #kui .tile { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 2px 10px; align-items: start; padding: 12px 12px 11px; border-radius: 8px; background: #18171c; border: 1px solid #242329; cursor: pointer; user-select: none; transition: border-color .15s, background-color .15s, opacity .2s; }
@@ -650,3 +651,38 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .palette .pfoot { display: flex; gap: 16px; padding: 9px 16px; border-top: 1px solid #2c2b30; color: var(--muted); font-size: 12px; flex: none; }
 #kui .palette .pfoot .pfr { margin-left: auto; }
 @media (max-width: 760px) { #kui .palette .pfoot span:not(:first-child), #kui .palette .prow .pr { display: none; } #kui .palscrim { padding-top: 8vh; } }
+
+/* ---------- deck motion ---------- */
+#kui .deckcard { position: relative; }
+#kui .selring { position: absolute; left: 0; top: 0; z-index: 2; border: 1px solid var(--accent); border-radius: 8px; pointer-events: none; opacity: 0; transform-origin: 0 0; }
+#kui .tile.sel { border-color: #3a2a1d; }
+#kui #kui-deck.entering .tile .grip { animation: kui-grip-in .2s var(--ease-out); }
+#kui #kui-deck.entering .tile { animation: kui-wiggle .2s var(--ease-out); }
+@keyframes kui-grip-in { from { opacity: 0; transform: translate(-120%, -50%); } }
+@keyframes kui-wiggle { 30% { transform: rotate(-.6deg); } 70% { transform: rotate(.6deg); } }
+#kui .palscrim { animation: kui-fade .16s var(--ease-out); }
+#kui .palette { animation: kui-pal-in .16s var(--ease-out); }
+@keyframes kui-fade { from { opacity: 0; } }
+@keyframes kui-pal-in { from { opacity: 0; transform: translateY(-8px) scale(.98); } }
+#kui .palette .plist { position: relative; }
+#kui .palette .pbar { position: absolute; left: 8px; right: 8px; top: 0; height: 36px; border-radius: 6px; background: #2c2b30; opacity: 0; pointer-events: none; transition: transform .16s var(--ease-out), opacity .12s; }
+#kui .palette .prow.on { background: none; }
+#kui .palette .pgroup { position: relative; }
+#kui .pexpand { display: grid; grid-template-rows: 1fr; animation: kui-rows .2s var(--ease-out); }
+#kui .pexpand > .pfields { min-height: 0; overflow: hidden; }
+@keyframes kui-rows { from { grid-template-rows: 0fr; opacity: 0; } }
+#kui .kb:active:not([disabled]), #kui .iconbtn:active { transition-duration: .12s; }
+#kui .sheetgrip, #kui .sheetscrim { display: none; }
+@media (max-width: 760px) {
+  #kui .deckpanel { position: fixed !important; left: 0; right: 0; bottom: 0; top: auto; z-index: 45; margin: 0; max-height: 82vh; overflow-y: auto; border-radius: 14px 14px 0 0; padding-top: 6px; transform: translateY(105%); transition: transform .24s var(--ease-out); box-shadow: 0 -20px 50px rgba(0,0,0,.55); }
+  #kui .deckpanel.sheet-open { transform: none; }
+  #kui .deckpanel.dragging { transition: none; }
+  #kui .sheetgrip { display: flex; justify-content: center; padding: 6px 0 12px; touch-action: none; cursor: grab; }
+  #kui .sheetgrip span { width: 40px; height: 4px; border-radius: 2px; background: #4a4a50; }
+  #kui .sheetscrim { display: block; position: fixed; inset: 0; z-index: 44; background: rgba(10,10,12,.5); animation: kui-fade .24s var(--ease-out); }
+  #kui .sheetscrim[style*="display: none"] { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #kui .palscrim, #kui .palette, #kui .pexpand, #kui .sheetscrim, #kui #kui-deck.entering .tile, #kui #kui-deck.entering .tile .grip { animation: kui-fade .08s linear !important; }
+  #kui .palette .pbar, #kui .deckpanel { transition: opacity .08s !important; }
+}

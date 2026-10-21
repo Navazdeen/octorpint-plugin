@@ -42,6 +42,51 @@ $(function () {
     function layerHeight(n) { var m = /_(\d+(?:\.\d+)?)mm_/.exec(n || ""); return m ? m[1] : null; }
     function material(n) { var m = /_\d+(?:\.\d+)?mm_([A-Za-z0-9+-]+)_/.exec(n || ""); return m ? m[1] : null; }
 
+    // Other plugins' root-anchored :has() rules (":root:has(X)", "html:has(X)", ".pg-dark:has(X)") make the browser re-check
+    // styles across the whole page after every DOM change. Rewrite each one to depend on an attribute on <html> that is
+    // set while X exists: same styling, but a change inside the Kobra UI no longer restyles ~37k elements.
+    function flattenRootHas() {
+        var flags = [], root = document.documentElement;
+        function split(sel) {   // top-level commas only
+            var out = [], depth = 0, cur = "";
+            for (var i = 0; i < sel.length; i++) {
+                var c = sel.charAt(i);
+                if (c === "(") depth++; else if (c === ")") depth--;
+                if (c === "," && !depth) { out.push(cur.trim()); cur = ""; } else cur += c;
+            }
+            out.push(cur.trim()); return out;
+        }
+        function rewrite(part) {
+            var m = /^(:root|html|\.pg-dark|html\.pg-dark):has\(/.exec(part);
+            if (!m) return part;
+            var depth = 1, i = m[0].length;
+            for (; i < part.length && depth; i++) { if (part.charAt(i) === "(") depth++; else if (part.charAt(i) === ")") depth--; }
+            var inner = part.slice(m[0].length, i - 1), rest = part.slice(i);
+            if (rest.indexOf(":has(") >= 0) return part;
+            try { document.querySelector(inner); } catch (e) { return part; }
+            var n = flags.indexOf(inner); if (n < 0) { flags.push(inner); n = flags.length - 1; }
+            return m[1] + "[data-kui-has-" + n + "]" + rest;
+        }
+        function walk(rules) {
+            Array.prototype.forEach.call(rules || [], function (r) {
+                if (r.cssRules && !r.selectorText) { walk(r.cssRules); return; }
+                if (!r.selectorText || r.selectorText.indexOf(":has(") < 0) return;
+                var next = split(r.selectorText).map(rewrite).join(", ");
+                if (next !== r.selectorText) r.selectorText = next;
+            });
+        }
+        Array.prototype.forEach.call(document.styleSheets, function (sh) { try { walk(sh.cssRules); } catch (e) { /* cross-origin sheet */ } });
+        if (!flags.length) return;
+        var queued = false;
+        function update() {
+            queued = false;
+            flags.forEach(function (sel, n) { var on = !!document.querySelector(sel); if (root.hasAttribute("data-kui-has-" + n) !== on) root.toggleAttribute("data-kui-has-" + n, on); });
+        }
+        update();
+        new MutationObserver(function () { if (!queued) { queued = true; requestAnimationFrame(update); } })
+            .observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+    }
+
     function KobraUiViewModel(parameters) {
         var self = this;
         self.settings = parameters[0];
@@ -1699,6 +1744,7 @@ $(function () {
 
         /* ====================== start ============================== */
         self.onStartupComplete = function () {
+            try { flattenRootHas(); } catch (e) { /* styling still works, only slower */ }
             // the viewers live inside the Live view card from now on
             var pg = $("#pg-container"); if (pg.length) { pg.appendTo("#kui-v-3d"); self.has3d(true); }
             var cc = $("#canvas_container"); if (cc.length) { cc.appendTo("#kui-v-2d"); self.has2d(true); self.theme2d(); setTimeout(self.theme2d, 2000); }

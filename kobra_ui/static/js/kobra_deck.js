@@ -2,6 +2,13 @@
 window.KobraDeck = function (self, h) {
     "use strict";
     var PLUGIN = h.PLUGIN, VALUE_RE = /^[A-Za-z0-9_.+\-]{1,40}$/;
+    var EASE_OUT = "cubic-bezier(.2,.8,.2,1)";
+    function reduced() { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+    function anim(el, frames, ms, extra) {
+        if (!el || !el.animate) return null;
+        if (reduced()) { frames = [{ opacity: frames[0].opacity === undefined ? .4 : frames[0].opacity }, { opacity: 1 }]; ms = Math.min(ms, 80); }
+        return el.animate(frames, $.extend({ duration: ms, easing: EASE_OUT }, extra || {}));
+    }
     var GROUP_ICON = { filament: "fa-arrow-down", maintenance: "fa-broom", motion: "fa-square-parking", other: "fa-terminal" };
     var MACRO_ICON = {
         LOAD_FILAMENT: "fa-arrow-down", UNLOAD_FILAMENT: "fa-arrow-up", PURGE_FILAMENT: "fa-droplet", M600: "fa-arrows-rotate",
@@ -29,8 +36,17 @@ window.KobraDeck = function (self, h) {
     function clone(o) { return JSON.parse(JSON.stringify(o)); }
     function presetOf(key) { var d = self.deck(); return key.indexOf("preset:") === 0 && d ? d.presets[key.slice(7)] || null : null; }
 
-    // one tile per deck entry (a macro name or "preset:<id>")
-    self.tileModel = function (key, groupId) {
+    // tile and section objects are reused while their content is unchanged, so Knockout keeps their DOM nodes:
+    // a save that only bumps the version re-renders nothing, and animations on those nodes keep running
+    var tileCache = {}, sectionCache = {};
+    function cached(cache, key, obj) {
+        var sig = JSON.stringify(obj, function (k, v) { return k === "tiles" ? v.map(function (t) { return t._sig; }) : v; });
+        var hit = cache[key];
+        if (hit && hit._sig === sig) return hit;
+        obj._sig = sig; cache[key] = obj; return obj;
+    }
+    self.tileModel = function (key, groupId) { return cached(tileCache, key + "|" + groupId, buildTile(key, groupId)); };
+    function buildTile(key, groupId) {
         var d = self.deck() || { pinned: [], hidden: [], colors: {}, confirm: [] }, preset = presetOf(key);
         var name = preset ? preset.macro : key, m = self.macroMap()[name];
         var params = m ? m.params : [];
@@ -47,7 +63,7 @@ window.KobraDeck = function (self, h) {
             color: d.colors[key] || (preset ? "blue" : ""),
             pinned: d.pinned.indexOf(key) >= 0, hidden: d.hidden.indexOf(key) >= 0, confirm: d.confirm.indexOf(key) >= 0
         };
-    };
+    }
     function firstLine(s) { s = (s || "").split(/\n/)[0]; return s.replace(/\s*[A-Z_]+ \[.*$/, "").replace(/\s*\[[A-Z_]+=.*$/, "").trim(); }
     function displayDefault(p) {
         if (p.default === null || p.default === undefined) return "auto";
@@ -69,12 +85,24 @@ window.KobraDeck = function (self, h) {
     self.deckSections = ko.pureComputed(function () {
         var d = self.deck(); if (!d) return [];
         var groups = placedGroups(), view = self.deckView();
-        if (view === "groups") return groups.map(function (g) { return { id: g.id, name: g.name, tiles: g.items.map(function (k) { return self.tileModel(k, g.id); }) }; })
+        if (view === "groups") return groups.map(function (g) { return cached(sectionCache, g.id, { id: g.id, name: g.name, tiles: g.items.map(function (k) { return self.tileModel(k, g.id); }) }); })
             .filter(function (s) { return s.tiles.length; });
         var all = []; groups.forEach(function (g) { g.items.forEach(function (k) { all.push(self.tileModel(k, g.id)); }); });
         if (view === "az") all.sort(function (a, b) { return a.label.localeCompare(b.label); });
         else all.sort(function (a, b) { return ((d.usage[b.key] || 0) - (d.usage[a.key] || 0)) || a.label.localeCompare(b.label); });
-        return [{ id: "all", name: view === "az" ? "All macros" : "Most used first", tiles: all }];
+        return [cached(sectionCache, "all:" + view, { id: "all", name: view === "az" ? "All macros" : "Most used first", tiles: all })];
+    });
+    // one flat list (group labels + tiles) for a single grid: switching views only moves the same cached nodes
+    var labelCache = {};
+    self.deckItems = ko.pureComputed(function () {
+        var out = [];
+        self.deckSections().forEach(function (sec) {
+            var lab = labelCache[sec.id + "|" + sec.name] || (labelCache[sec.id + "|" + sec.name] = { isLabel: true, id: sec.id, name: sec.name, key: "label:" + sec.id, tiles: sec.tiles });
+            lab.tiles = sec.tiles;
+            out.push(lab);
+            sec.tiles.forEach(function (t) { out.push(t); });
+        });
+        return out;
     });
     self.deckCount = ko.pureComputed(function () {
         var n = 0; self.deckSections().forEach(function (s) { s.tiles.forEach(function (t) { if (!t.hidden) n++; }); }); return n;
@@ -211,7 +239,10 @@ window.KobraDeck = function (self, h) {
         if (ask) self.confirm("Run " + t.label + "?", ask, "Run", ask.indexOf("lost") >= 0 || ask.indexOf("ruin") >= 0, go); else go();
     };
     self.runSelected = function () { var t = self.selTile(); if (t && self.selRunEnabled()) self.runTile(t, self.selValues()); };
-    self.tileClick = function (t) { if (!self.deckEdit()) self.selectTile(t); return true; };
+    self.sheetOpen = ko.observable(false);
+    function phone() { return window.matchMedia && window.matchMedia("(max-width: 760px)").matches; }
+    self.tileClick = function (t) { if (!self.deckEdit()) { self.selectTile(t); if (phone()) self.sheetOpen(true); } return true; };
+    self.closeSheet = function () { self.sheetOpen(false); };
     self.tileDblClick = function (t) { if (!self.deckEdit()) { self.selectTile(t); self.runSelected(); } };
     self.tileKey = function (t, e) { if (e.key === "Enter") { self.selectTile(t); self.runSelected(); return false; } return true; };
     self.quickRun = function (t) { self.runTile(t, null); };
@@ -220,6 +251,13 @@ window.KobraDeck = function (self, h) {
         return "tile" + (self.selMacro() === t.key ? " sel" : "") + (t.color ? " c-" + t.color : "") + (t.hidden ? " is-hidden" : "") + (t.missing ? " missing" : "");
     };
     self.hasHint = function (t, hint) { return t.hints.indexOf(hint) >= 0; };
+    self.flagHtml = function (t) {
+        var out = "";
+        if (t.hints.indexOf("heats") >= 0) out += '<i class="fa-solid fa-fire" title="Heats"></i>';
+        if (t.hints.indexOf("homes") >= 0) out += '<i class="fa-solid fa-house" title="Homes"></i>';
+        if (t.confirm || t.hints.indexOf("restarts") >= 0) out += '<i class="fa-solid fa-circle-exclamation" title="Asks first"></i>';
+        return out;
+    };
 
     self.savePreset = function () {
         var t = self.selTile(); if (!t || t.missing) return;
@@ -248,6 +286,10 @@ window.KobraDeck = function (self, h) {
         var on = !self.deckEdit();
         if (on && self.deckView() !== "groups") self.setDeckView("groups");
         self.openMenu(null); self.deckEdit(on);
+        if (on && !reduced()) {   // grips slide in and the tiles wiggle once, only on entering
+            var deck = document.getElementById("kui-deck");
+            if (deck) { deck.classList.add("entering"); setTimeout(function () { deck.classList.remove("entering"); }, 240); }
+        }
     };
     // every edit saves at once and offers Undo for 6 s (Undo puts the previous layout back)
     function editSave(mutator, message) {
@@ -261,7 +303,14 @@ window.KobraDeck = function (self, h) {
     function toggleIn(list, key) { var i = list.indexOf(key); if (i >= 0) list.splice(i, 1); else list.push(key); return i < 0; }
     self.tileMenu = function (t) { self.toggleMenu("tile:" + t.key); };
     self.tileMenuOpen = function (t) { return self.openMenu() === "tile:" + t.key; };
-    self.tilePin = function (t) { self.openMenu(null); editSave(function (d) { toggleIn(d.pinned, t.key); }, (t.pinned ? "Removed " : "Pinned ") + t.label + (t.pinned ? " from" : " to") + " the Printer screen"); };
+    self.tilePin = function (t) {
+        self.openMenu(null);
+        editSave(function (d) { toggleIn(d.pinned, t.key); }, (t.pinned ? "Removed " : "Pinned ") + t.label + (t.pinned ? " from" : " to") + " the Printer screen");
+        if (!t.pinned && !reduced()) setTimeout(function () {
+            var i = document.querySelector('#kui .tile[data-name="' + t.key + '"] .pinmark i');
+            anim(i, [{ transform: "scale(1)" }, { transform: "scale(1.25)", offset: .45 }, { transform: "scale(1)" }], 240);
+        }, 0);
+    };
     self.tileHide = function (t) { self.openMenu(null); editSave(function (d) { toggleIn(d.hidden, t.key); }, (t.hidden ? "Showing " : "Hid ") + t.label); };
     self.tileConfirm = function (t) { self.openMenu(null); editSave(function (d) { toggleIn(d.confirm, t.key); }, t.confirm ? t.label + " runs without asking" : t.label + " asks before running"); };
     self.tileColor = function (t, color) {
@@ -300,8 +349,9 @@ window.KobraDeck = function (self, h) {
     function place(e) {
         drag.el.style.transform = "translate(" + (e.clientX - drag.grabX - drag.home.left) + "px," + (e.clientY - drag.grabY - drag.home.top) + "px) scale(1.03)";
     }
+    function lastNode(box) { return box.lastElementChild; }
     function pastLast(box, e) {
-        var tiles = Array.prototype.filter.call(box.children, function (c) { return c !== drag.el; });
+        var tiles = Array.prototype.filter.call(box.children, function (c) { return c !== drag.el && c.classList.contains("tile"); });
         if (!tiles.length) return true;
         var r = tiles[tiles.length - 1].getBoundingClientRect();
         return e.clientY > r.bottom || (e.clientY >= r.top && e.clientX > r.right);
@@ -311,14 +361,17 @@ window.KobraDeck = function (self, h) {
         var zone = under && under.closest && under.closest("#kui .newgroup");
         $("#kui .newgroup").toggleClass("over", !!zone); drag.toNew = !!zone;
         if (zone || !under || !under.closest) return;
-        var t = under.closest("#kui-deck .tile"), box = under.closest("#kui-deck .deck");
+        var t = under.closest("#kui-deck .tile"), lab = under.closest("#kui-deck .lbl3"), box = under.closest("#kui-deck");
         var mutate = null;
         if (t && t !== drag.el) {
             var r = t.getBoundingClientRect(), before = e.clientX < r.left + r.width / 2;
             if (before && t.previousElementSibling !== drag.el) mutate = function () { t.parentNode.insertBefore(drag.el, t); };
             else if (!before && t.nextElementSibling !== drag.el) mutate = function () { t.parentNode.insertBefore(drag.el, t.nextElementSibling); };
-        } else if (!t && box && box.lastElementChild !== drag.el && pastLast(box, e)) {
-            // the gaps between tiles don't count: only past the group's last tile (or an empty group) appends
+        } else if (lab && lab.nextElementSibling !== drag.el) {
+            // over a group's label: becomes that group's first tile
+            mutate = function () { lab.parentNode.insertBefore(drag.el, lab.nextElementSibling); };
+        } else if (!t && !lab && box && lastNode(box) !== drag.el && pastLast(box, e)) {
+            // the gaps between tiles don't count: only past the very last tile appends
             mutate = function () { box.appendChild(drag.el); };
         }
         if (mutate) { self.flip(deckEl, mutate, 160); drag.home = layoutRect(drag.el); place(e); }
@@ -347,10 +400,11 @@ window.KobraDeck = function (self, h) {
         if (!d.started) return;
         var from = d.el.style.transform;
         d.el.classList.remove("lifting"); d.el.style.transform = "";
-        if (d.el.animate && from) d.el.animate([{ transform: from }, { transform: "scale(.99)", offset: .75 }, { transform: "none" }], { duration: 160, easing: "cubic-bezier(.2,.8,.2,1)" });
         $("#kui .newgroup").removeClass("over");
-        var order = Array.prototype.map.call(document.querySelectorAll("#kui-deck .dgroup"), function (g) {
-            return { id: g.getAttribute("data-group"), items: Array.prototype.map.call(g.querySelectorAll(".tile"), function (t) { return t.getAttribute("data-name"); }) };
+        var order = [], cur = null;
+        Array.prototype.forEach.call(document.getElementById("kui-deck").children, function (n) {
+            if (n.classList.contains("lbl3")) { cur = { id: n.getAttribute("data-group"), items: [] }; order.push(cur); }
+            else if (n.classList.contains("tile") && cur) cur.items.push(n.getAttribute("data-name"));
         });
         var tile = self.tileModel(d.key, "");
         editSave(function (dk) {
@@ -360,6 +414,11 @@ window.KobraDeck = function (self, h) {
             });
             if (d.toNew) dk.groups.push({ id: "g" + Date.now().toString(36), name: "New group", items: [d.key] });
         }, d.toNew ? "Made a new group with " + tile.label : "Moved " + tile.label);
+        // saving re-renders the tiles; settle the new node from where the pointer left it, with a slight overshoot
+        if (from && !reduced()) setTimeout(function () {
+            var el = document.querySelector('#kui-deck .tile[data-name="' + d.key + '"]');
+            if (el && el.animate) el.animate([{ transform: from }, { transform: "scale(.99)", offset: .75 }, { transform: "none" }], { duration: 160, easing: EASE_OUT });
+        }, 0);
     }
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("pointermove", onMove, { passive: false });
@@ -519,15 +578,87 @@ window.KobraDeck = function (self, h) {
         if (e.key === "Escape") { self.paletteExpanded(null); $("#kui-pal-q").trigger("focus"); return false; }
         return true;
     };
-    self.paletteHover = function (row) { self.paletteIndex(row.index); return true; };
+    self.paletteHover = function (row) { if (self.paletteIndex() !== row.index) self.paletteIndex(row.index); return true; };
+    function placeBar() {
+        var bar = document.querySelector("#kui .palette .pbar"), row = document.querySelector('#kui-palette .prow[data-index="' + self.paletteIndex() + '"]');
+        if (!bar) return;
+        if (!row) { bar.style.opacity = "0"; return; }
+        bar.style.opacity = "1"; bar.style.height = row.offsetHeight + "px";
+        bar.style.transform = "translateY(" + row.offsetTop + "px)";
+    }
+    self.paletteGroups.subscribe(function () { setTimeout(placeBar, 0); });
+    self.paletteOpen.subscribe(function (v) { if (v) setTimeout(placeBar, 0); });
     self.paletteRowClick = function (row) { self.paletteIndex(row.index); self.paletteActivate(row); };
     self.paletteBackdrop = function (d, e) { if (e.target === e.currentTarget) self.closePalette(); return true; };
     // keep the highlighted row in view
     self.paletteIndex.subscribe(function (i) {
-        setTimeout(function () { var r = document.querySelector('#kui-palette .prow[data-index="' + i + '"]'); if (r && r.scrollIntoView) r.scrollIntoView({ block: "nearest" }); }, 0);
+        setTimeout(function () { var r = document.querySelector('#kui-palette .prow[data-index="' + i + '"]'); placeBar(); if (r && r.scrollIntoView) r.scrollIntoView({ block: "nearest" }); }, 0);
     });
 
     /* ------------------------------ motion ------------------------------ */
+    // one accent ring that slides from the old selection to the new one (FLIP on the ring itself)
+    var ringAt = null;
+    function placeRing(animate) {
+        var ring = document.querySelector("#kui .selring"), card = ring && ring.parentNode;
+        var tile = self.selMacro() && document.querySelector('#kui-deck .tile[data-name="' + self.selMacro() + '"]');
+        if (!ring) return;
+        if (!tile || !tile.offsetParent) { ring.style.opacity = "0"; ringAt = null; return; }
+        var c = card.getBoundingClientRect(), r = tile.getBoundingClientRect();
+        var to = { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height };
+        ring.style.opacity = "1"; ring.style.width = to.w + "px"; ring.style.height = to.h + "px";
+        ring.style.transform = "translate(" + to.x + "px," + to.y + "px)";
+        if (animate && ringAt && !reduced() && ring.animate) {
+            ring.animate([{ transform: "translate(" + ringAt.x + "px," + ringAt.y + "px) scale(" + (ringAt.w / to.w) + "," + (ringAt.h / to.h) + ")" },
+                          { transform: "translate(" + to.x + "px," + to.y + "px)" }], { duration: 180, easing: EASE_OUT });
+        }
+        ringAt = to;
+    }
+    self.selMacro.subscribe(function () {
+        setTimeout(function () {
+            placeRing(true);
+            anim(document.querySelector("#kui-deck-panel .pbody"), [{ opacity: .35 }, { opacity: 1 }], 180);
+        }, 0);
+    });
+    self.deckItems.subscribe(function () { setTimeout(function () { placeRing(false); }, 280); });
+    self.deckEdit.subscribe(function () { setTimeout(function () { placeRing(false); }, 0); });
+    $(window).on("resize", function () { placeRing(false); });
+
+    // tiles rise in once, on the first visit to the Macros view
+    var staggered = false;
+    function stagger() {
+        if (staggered || self.route() !== "macros" || !self.deckLoaded()) return;
+        staggered = true;
+        Array.prototype.forEach.call(document.querySelectorAll("#kui-deck .tile:not(.is-hidden), #kui-deck .lbl3"), function (el, i) {
+            if (reduced()) el.animate && el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 80, fill: "backwards" });
+            else el.animate && el.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 220, delay: Math.min(i * 15, 80), easing: EASE_OUT, fill: "backwards" });
+        });
+        setTimeout(function () { placeRing(false); }, 0);
+    }
+    self.route.subscribe(function (r) { if (r === "macros") stagger(); else self.sheetOpen(false); });
+    self.deckLoaded.subscribe(function (v) { if (v) setTimeout(stagger, 0); });
+
+    // phone bottom sheet: the grip follows the finger 1:1; past 120 px it closes, otherwise it springs back
+    var sheetDrag = null;
+    document.addEventListener("pointerdown", function (e) {
+        var grip = e.target.closest && e.target.closest("#kui-deck-panel .sheetgrip"); if (!grip) return;
+        sheetDrag = { y0: e.clientY, dy: 0, el: document.getElementById("kui-deck-panel") };
+        sheetDrag.el.classList.add("dragging");
+        try { grip.setPointerCapture(e.pointerId); } catch (err) { /* synthetic */ }
+    });
+    document.addEventListener("pointermove", function (e) {
+        if (!sheetDrag) return;
+        sheetDrag.dy = Math.max(0, e.clientY - sheetDrag.y0);
+        sheetDrag.el.style.transform = "translateY(" + sheetDrag.dy + "px)";
+    });
+    function sheetUp() {
+        if (!sheetDrag) return;
+        var d = sheetDrag; sheetDrag = null;
+        d.el.classList.remove("dragging"); d.el.style.transform = "";
+        if (d.dy > 120) self.sheetOpen(false);
+    }
+    document.addEventListener("pointerup", sheetUp);
+    document.addEventListener("pointercancel", sheetUp);
+
     // FLIP: measure keyed children, change the DOM, then play each from where it was
     self.flip = function (container, mutate, ms) {
         var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
