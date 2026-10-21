@@ -125,3 +125,7 @@ def test_validate_deck_keeps_missing_macros():  # Review Focus 3: kept, not drop
     d["groups"][0]["items"].append("preset:p1")
     v = validate_deck(d)
     assert v["presets"]["p1"]["macro"] == "GONE_MACRO" and "preset:p1" in v["groups"][0]["items"]
+
+
+def test_klipper_placeholder_description_is_empty():
+    assert by_name()["Z_ENDSTOP_HIT"]["description"] == ""  # Klipper fills in "G-Code macro"

@@ -29,6 +29,7 @@
     <nav class="rail" aria-label="Main">
       <div class="mark" aria-hidden="true">K2</div>
       <a href="?kui=printer" data-bind="click: nav, attr: { 'aria-current': route() === 'printer' ? 'page' : null }"><i class="fa-solid fa-print"></i>Printer</a>
+      <a href="?kui=macros" data-bind="click: nav, attr: { 'aria-current': route() === 'macros' ? 'page' : null }"><i class="fa-solid fa-table-cells-large"></i>Macros</a>
       <a href="?kui=files" data-bind="click: nav, attr: { 'aria-current': route() === 'files' ? 'page' : null }"><i class="fa-regular fa-folder-open"></i>Files</a>
       <a href="?kui=mesh" data-bind="click: nav, attr: { 'aria-current': route() === 'mesh' ? 'page' : null }"><i class="fa-solid fa-chart-area"></i>Mesh</a>
       <a href="?kui=klipper" data-bind="click: nav, attr: { 'aria-current': (route() === 'klipper' || route() === 'editor') ? 'page' : null }"><i class="fa-solid fa-microchip"></i>Klipper</a>
@@ -169,6 +170,13 @@
             </div>
           </section>
 
+          <section class="card" id="kui-quick" aria-labelledby="kui-h-quick" data-bind="visible: quickItems().length">
+            <h2 id="kui-h-quick">Quick macros <a class="aside" href="?kui=macros" data-bind="click: nav">All macros</a></h2>
+            <div class="qgrid" data-bind="foreach: quickItems">
+              <button class="kb qm" data-bind="click: $root.quickRun, enable: !$root.quickBlocked($data), attr: { 'data-name': key, title: label + (chips.length ? ' · ' + chips.map(function (c) { return c.k + ' ' + c.v; }).join(', ') : '') }"><i class="fa-solid" data-bind="css: icon"></i><span data-bind="text: short"></span></button>
+            </div>
+          </section>
+
           <section class="card wide" aria-labelledby="kui-h-recent">
             <h2 id="kui-h-recent">Recent files <a class="aside" href="?kui=files" data-bind="click: nav">All <span class="num" data-bind="text: fileCount()"></span> files</a></h2>
             <ul class="gallery" data-bind="foreach: recentFiles">
@@ -262,6 +270,76 @@
       </section>
 
       <!-- ================= FILES ================= -->
+      <section data-bind="visible: route() === 'macros'" aria-labelledby="kui-h1-macros">
+        <header class="top"><h1 id="kui-h1-macros">Macros</h1><span class="finding" data-bind="html: macrosFinding()"></span>
+          <div class="right" data-bind="template: { name: 'kui-topright' }"></div></header>
+        <div class="view">
+          <div class="deckwrap">
+            <section class="card deckcard" aria-labelledby="kui-h-deck">
+              <h2 id="kui-h-deck">Deck <span class="aside">
+                <span class="seg" role="group" aria-label="Order">
+                  <button data-bind="attr: { 'aria-pressed': deckView() === 'groups' ? 'true' : 'false' }, click: function () { setDeckView('groups') }">Groups</button>
+                  <button data-bind="attr: { 'aria-pressed': deckView() === 'az' ? 'true' : 'false' }, click: function () { setDeckView('az') }">A–Z</button>
+                  <button data-bind="attr: { 'aria-pressed': deckView() === 'used' ? 'true' : 'false' }, click: function () { setDeckView('used') }">Most used</button>
+                </span>
+                <button class="kb sm" id="kui-deck-edit" data-bind="visible: canEditDeck(), css: { accent: deckEdit() }, click: toggleDeckEdit"><i class="fa-solid" data-bind="css: deckEdit() ? 'fa-check' : 'fa-pen'"></i><span data-bind="text: deckEdit() ? 'Done' : 'Edit deck'"></span></button>
+              </span></h2>
+              <p class="empty" data-bind="visible: !deckLoaded()">Reading macros from Klipper…</p>
+              <div id="kui-deck" data-bind="css: { editing: deckEdit() }, foreach: deckSections">
+                <div class="dgroup" data-bind="attr: { 'data-group': id }">
+                  <div class="lbl3"><span data-bind="text: name"></span><span class="line"></span></div>
+                  <div class="deck" data-bind="foreach: tiles">
+                    <div tabindex="0" role="button" data-bind="attr: { class: $root.tileClass($data), 'data-name': key, 'data-flip': key, 'aria-pressed': $root.selMacro() === key ? 'true' : 'false', 'aria-label': label }, click: $root.tileClick, event: { dblclick: $root.tileDblClick, keydown: $root.tileKey }">
+                      <span class="grip" aria-hidden="true"><i class="fa-solid fa-grip-vertical"></i></span>
+                      <span class="ic" aria-hidden="true"><i class="fa-solid" data-bind="css: icon"></i></span>
+                      <span class="n" data-bind="text: label, css: { num: !preset }"></span>
+                      <span class="pinmark" aria-hidden="true"><i class="fa-solid fa-thumbtack" data-bind="visible: pinned"></i></span>
+                      <span class="d" data-bind="text: missing ? 'Missing: not in the Klipper config' : desc"></span>
+                      <span class="chips" data-bind="foreach: chips"><span class="chip num"><b data-bind="text: k"></b> <span data-bind="text: v"></span></span></span>
+                      <span class="flags" aria-hidden="true">
+                        <i class="fa-solid fa-fire" title="Heats" data-bind="visible: $root.hasHint($data, 'heats')"></i>
+                        <i class="fa-solid fa-house" title="Homes" data-bind="visible: $root.hasHint($data, 'homes')"></i>
+                        <i class="fa-solid fa-circle-exclamation" title="Asks first" data-bind="visible: confirm || $root.hasHint($data, 'restarts')"></i>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card deckpanel" id="kui-deck-panel" aria-live="polite" data-bind="with: selTile">
+              <h2><span class="pname" data-bind="text: label, css: { num: !preset }"></span><span class="aside" data-bind="visible: pinned"><i class="fa-solid fa-thumbtack" style="color:var(--accent)"></i>Pinned</span></h2>
+              <p class="pdesc" data-bind="text: missing ? macro + ' is not in the Klipper config any more.' : ($root.macroMap()[macro] || {}).description"></p>
+              <div class="pform" data-bind="foreach: $root.selParams, visible: $root.selParams().length">
+                <div class="pfield" data-bind="attr: { 'data-param': name }">
+                  <label class="fk num" data-bind="text: name, attr: { for: 'kui-dp-' + name }"></label>
+                  <!-- ko if: choices.length -->
+                  <span class="seg fchoice" role="group" data-bind="foreach: choices">
+                    <button data-bind="text: $data, attr: { 'aria-pressed': ($parent.value() || $parent.placeholder) === $data ? 'true' : 'false' }, click: function () { $parent.value($data) }"></button>
+                  </span>
+                  <!-- /ko -->
+                  <!-- ko ifnot: choices.length -->
+                  <input class="finp num" autocomplete="off" spellcheck="false" data-bind="textInput: value, attr: { id: 'kui-dp-' + name, placeholder: placeholder, inputmode: kind === 'number' ? 'decimal' : 'text' }, css: { bad: err() }, event: { keydown: function (d, e) { if (e.key === 'Enter') { $root.runSelected(); return false; } return true; } }">
+                  <!-- /ko -->
+                  <span class="fh" data-bind="visible: hint, text: hint"></span>
+                  <span class="ferr" data-bind="attr: { hidden: !err() }, text: err()"></span>
+                </div>
+              </div>
+              <p class="noparams" data-bind="visible: !$root.selParams().length">No parameters.</p>
+              <div class="lbl3"><span>Sends</span><span class="line"></span></div>
+              <div class="preview num" id="kui-deck-preview" data-bind="text: $root.selPreview()"></div>
+              <p class="why" data-bind="visible: !$root.selBlock() && $root.selSentence()"><i class="fa-solid fa-circle-info"></i><span data-bind="text: $root.selSentence()"></span></p>
+              <p class="why block" data-bind="visible: $root.selBlock()"><i class="fa-solid fa-ban"></i><span data-bind="text: $root.selBlock()"></span></p>
+              <div class="pactions">
+                <button class="kb primary" id="kui-deck-run" data-bind="enable: $root.selRunEnabled(), click: $root.runSelected"><i class="fa-solid fa-play"></i>Run</button>
+                <button class="kb" data-bind="enable: !missing && $root.canEditDeck(), click: $root.savePreset"><i class="fa-regular fa-bookmark"></i>Save as preset</button>
+                <button class="kb sm" data-bind="enable: !missing, click: $root.openMacroSource"><i class="fa-solid fa-code"></i>Open in config</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
       <section data-bind="visible: route() === 'files'" aria-labelledby="kui-h1-files">
         <header class="top"><h1 id="kui-h1-files">Files</h1><span class="finding" data-bind="html: filesFinding()"></span>
           <div class="right" data-bind="template: { name: 'kui-topright' }"></div></header>

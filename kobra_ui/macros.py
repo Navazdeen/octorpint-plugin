@@ -127,7 +127,7 @@ def parse_macros(settings):
             hints.append(state)
         macros.append({
             "name": name,
-            "description": opts.get("description", "") or "",
+            "description": "" if (opts.get("description") or "").strip() == "G-Code macro" else opts.get("description") or "",
             "params": _params(gcode, settings),
             "hints": hints,
             "internal": name.startswith("_"),

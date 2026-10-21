@@ -230,11 +230,24 @@ $(function () {
         }
         function setBusy(btn, on) { if (!btn) return; btn.classList.toggle("is-busy", on); if (on) btn.setAttribute("aria-busy", "true"); else btn.removeAttribute("aria-busy"); }
         function cleanError(e) { return String(e || "Klipper didn't say why.").split("\n")[0].replace(/^!!\s*/, "").slice(0, 200); }
-        self.gcode = function (cmd) {
-            var fb = feedbackFor(cmd), id = "r" + (++runSeq) + "-" + Date.now().toString(36);
+        // register a run so its pushed result turns into a toast and the clicked button's spinner stops
+        self.runFeedback = function (id, cmd, after) {
+            var fb = feedbackFor(cmd);
             var btn = document.activeElement && document.activeElement.closest ? document.activeElement.closest("#kui button") : null;
-            var run = runs[id] = { cmd: cmd, fb: fb, btn: btn, toast: fb.busy ? self.toast(fb.busy, "busy") : null };
+            var run = runs[id] = { cmd: cmd, fb: fb, btn: btn, after: after, toast: fb.busy ? self.toast(fb.busy, "busy") : null };
             setBusy(btn, true);
+            return run;
+        };
+        // the plugin refused the run before sending it (bad parameter, unknown macro)
+        self.runAbort = function (id, title, detail) {
+            var run = runs[id]; if (!run) return;
+            delete runs[id]; setBusy(run.btn, false);
+            if (run.toast && !run.toast.leaving()) self.toastSet(run.toast, title, "bad", detail); else self.toast(title, "bad", detail);
+            if (run.after) run.after(false);
+        };
+        self.newRunId = function () { return "r" + (++runSeq) + "-" + Date.now().toString(36); };
+        self.gcode = function (cmd) {
+            var id = self.newRunId(), run = self.runFeedback(id, cmd);
             OctoPrint.simpleApiCommand(PLUGIN, "run", { script: cmd, id: id }).fail(function () {
                 // no socket path (Klipper's API socket missing): send through OctoPrint, without a completion signal
                 delete runs[id]; setBusy(btn, false);
@@ -245,6 +258,7 @@ $(function () {
         function finishRun(r) {
             var run = runs[r.id]; if (!run) return;
             delete runs[r.id]; setBusy(run.btn, false);
+            if (run.after) run.after(!!r.ok);
             var live = run.toast && !run.toast.leaving();
             if (r.ok) {
                 if (run.fb.done) { if (live) self.toastSet(run.toast, run.fb.done, "good"); else if (!run.toast) self.toast(run.fb.done, "good"); }
@@ -1327,11 +1341,26 @@ $(function () {
             self.edName(name); self.edLoaded(false); self.edError("");
             OctoPrint.get("plugin/" + PLUGIN + "/config/" + encodeURIComponent(name)).done(function (r) {
                 self.edOrig(r.content); self.edText(r.content); self.edLoaded(true);
-                setTimeout(function () { var t = document.getElementById("kui-ed"); if (t) { t.scrollTop = 0; self.edScroll(null, { target: t }); } }, 0);
+                setTimeout(function () { var t = document.getElementById("kui-ed"); if (t) { t.scrollTop = 0; self.edScroll(null, { target: t }); } applyGoto(); }, 0);
             }).fail(function () { self.toast("Couldn't open " + name + ".", "bad"); });
             self.loadHistory(name);
         };
         self.openEditor = function (name) { self.go("editor", name); };
+        // open a config file with the caret on a line (palette and deck "Open in macros.cfg")
+        var gotoLine = 0;
+        function applyGoto() {
+            var t = document.getElementById("kui-ed"); if (!t || !gotoLine) return;
+            var lines = self.edText().split("\n"), pos = 0;
+            for (var i = 0; i < gotoLine - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+            t.focus(); t.setSelectionRange(pos, pos); t.scrollTop = Math.max(0, (gotoLine - 4) * 21);
+            self.edScroll(null, { target: t }); self.edCaret(null, { target: t });
+            gotoLine = 0;
+        }
+        self.editorGoto = function (file, line) {
+            gotoLine = line || 1;
+            if (self.route() === "editor" && self.edName() === file && self.edLoaded()) { setTimeout(applyGoto, 0); return; }
+            self.openEditor(file);
+        };
         self.loadHistory = function (name) {
             OctoPrint.get("plugin/" + PLUGIN + "/config/" + encodeURIComponent(name) + "/history").done(function (r) { self.edHistory(r.versions || []); });
         };
