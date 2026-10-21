@@ -1,0 +1,137 @@
+"""Macros for the deck, read from Klipper's configfile.settings.
+
+Pure functions only (no OctoPrint, no I/O) so they can be tested on their own.
+"""
+
+import re
+
+SETTINGS_SECTION = "gcode_macro _printer_settings"
+SLICER_MACROS = {"START_PRINT", "PRINT_END", "SET_PRINT_STATS_INFO"}
+# hints that the template alone doesn't show: M600 parks and waits, which only makes sense mid-print
+STATE_OVERRIDES = {"M600": "printing_only"}
+
+_PARAM = re.compile(r"""params(?:\.([A-Z_][A-Z0-9_]*)|\[['"]([A-Z_][A-Z0-9_]*)['"]\])(\s*\|\s*default\(((?:[^()]|\([^()]*\))*)\))?([^}%]*)""")
+_SETTING_REF = re.compile(r"""^(?:s|printer\[['"]gcode_macro _PRINTER_SETTINGS['"]\])\.([a-z_][a-z0-9_]*)$""")
+_NUMBER = re.compile(r"^-?\d+(\.\d+)?$")
+_SET_FROM_PARAM = re.compile(r"""\{%-?\s*set\s+(\w+)\s*=\s*params(?:\.(\w+)|\[['"](\w+)['"]\])""")
+_SET_DICT = re.compile(r"""\{%-?\s*set\s+(\w+)\s*=\s*\{(.*?)\}\s*-?%\}""", re.S)
+_DICT_KEY = re.compile(r"""['"]([^'"]+)['"]\s*:""")
+_FIRST_IF = re.compile(r"""\{%-?\s*if\s+(.*?)\s*-?%\}(.*?)\{%-?\s*(?:elif|else|endif)\b""", re.S)
+_HINTS = {
+    "heats": re.compile(r"\b(M104|M109|M140|M190|SET_HEATER_TEMPERATURE)\b|\b_HEAT"),
+    "homes": re.compile(r"\bG28\b|\b_ENSURE_HOMED\b"),
+    "restarts": re.compile(r"\b(SAVE_CONFIG|RESTART|FIRMWARE_RESTART)\b"),
+}
+
+
+def _resolve_default(expr, settings):
+    """(value, source) for a default() expression; value None when it is computed at run time."""
+    expr = expr.strip()
+    if len(expr) >= 2 and expr[0] == expr[-1] and expr[0] in "'\"" and expr[0] not in expr[1:-1]:
+        return expr[1:-1], None
+    if _NUMBER.match(expr):
+        return expr, None
+    m = _SETTING_REF.match(expr)
+    if m:
+        value = settings.get(SETTINGS_SECTION, {}).get("variable_" + m.group(1))
+        if value is not None:
+            value, _ = _resolve_default(str(value), {})  # variable_ values are Jinja literals: 'adaptive', 40.0
+            if value is not None:
+                return value, "_PRINTER_SETTINGS " + m.group(1)
+    return None, None
+
+
+def _choices(name, gcode):
+    """String values a parameter is checked against: == 'X' tests or the keys of a dict it indexes."""
+    names = {name}
+    for m in _SET_FROM_PARAM.finditer(gcode):
+        if (m.group(2) or m.group(3)) == name:
+            names.add(m.group(1))
+    found = []
+    for var in names:
+        for lit in re.findall(r"\b%s\s*==\s*['\"]([^'\"]+)['\"]" % re.escape(var), gcode):
+            found.append(lit)
+    for m in _SET_DICT.finditer(gcode):
+        dict_name, body = m.group(1), m.group(2)
+        if any(re.search(r"\b%s\[\s*%s\s*\]|\b%s\s+in\s+%s\b" % (re.escape(dict_name), re.escape(v), re.escape(v), re.escape(dict_name)), gcode) for v in names):
+            found.extend(_DICT_KEY.findall(body))
+    out = []
+    for f in found:
+        if f not in out:
+            out.append(f)
+    return out
+
+
+def _params(gcode, settings):
+    out = {}
+    for m in _PARAM.finditer(gcode):
+        name = m.group(1) or m.group(2)
+        has_default, expr, tail = m.group(3), m.group(4), m.group(5) or ""
+        if name in out and (out[name]["default"] is not None or not has_default):
+            continue
+        default, source = _resolve_default(expr, settings) if has_default else (None, None)
+        number = default is not None and _NUMBER.match(default.strip()) is not None
+        number = number or re.match(r"\s*\|\s*(float|int)\b", tail) is not None
+        param = {"name": name, "default": default, "source": source, "kind": "number" if number else "text", "choices": []}
+        if name in out:
+            param["kind"] = out[name]["kind"] if out[name]["kind"] == "number" else param["kind"]
+            out[name].update(param)
+        else:
+            out[name] = param
+    for p in out.values():
+        if p["kind"] == "text":
+            p["choices"] = _choices(p["name"], gcode)
+    return list(out.values())
+
+
+def _state_hint(gcode):
+    """paused_only / printing_only when the template opens by doing nothing (or failing) in the other state."""
+    m = _FIRST_IF.search(gcode)
+    if not m:
+        return None
+    cond, branch = m.group(1).strip(), m.group(2)
+    lines = [l.strip() for l in branch.strip().splitlines() if l.strip()]
+    idle_branch = all(l.startswith("RESPOND") or "action_raise_error" in l or "action_respond_info" in l for l in lines)
+    if not idle_branch:
+        return None
+    if re.fullmatch(r"not\s+printer\.pause_resume\.is_paused", cond):
+        return "paused_only"
+    if re.search(r"printer\.print_stats\.state\s*(!=|not\s+in)", cond):
+        return "printing_only"
+    return None
+
+
+def _commands(gcode):
+    """The template without messages and heater-off lines, so hints only see what it really does."""
+    keep = []
+    for line in gcode.splitlines():
+        l = line.strip()
+        if l.startswith(("RESPOND", "{action_respond_info", "{ action_respond_info")):
+            continue
+        if re.match(r"(M104|M140)\s+S0(\.0*)?\s*$", l) or re.match(r"SET_HEATER_TEMPERATURE\s.*TARGET=0(\.0*)?\s*$", l):
+            continue
+        keep.append(line)
+    return "\n".join(keep)
+
+
+def parse_macros(settings):
+    macros = []
+    for section, opts in settings.items():
+        if not section.startswith("gcode_macro "):
+            continue
+        name = section[len("gcode_macro "):].strip().upper()
+        gcode = opts.get("gcode", "") or ""
+        hints = [h for h, rx in _HINTS.items() if rx.search(_commands(gcode))]
+        state = STATE_OVERRIDES.get(name) or _state_hint(gcode)
+        if state:
+            hints.append(state)
+        macros.append({
+            "name": name,
+            "description": opts.get("description", "") or "",
+            "params": _params(gcode, settings),
+            "hints": hints,
+            "internal": name.startswith("_"),
+            "slicer": name in SLICER_MACROS,
+        })
+    macros.sort(key=lambda m: m["name"])
+    return macros

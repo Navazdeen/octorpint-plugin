@@ -1,0 +1,551 @@
+{
+ "bed_mesh": {
+  "adaptive_margin": 5.0,
+  "algorithm": "bicubic",
+  "bicubic_tension": 0.2,
+  "fade_end": 0.0,
+  "fade_start": 1.0,
+  "horizontal_move_z": 3.0,
+  "mesh_max": [
+   210.0,
+   215.0
+  ],
+  "mesh_min": [
+   14.0,
+   11.0
+  ],
+  "mesh_pps": [
+   4,
+   4
+  ],
+  "move_check_distance": 5.0,
+  "probe_count": [
+   7,
+   7
+  ],
+  "scan_overshoot": 0,
+  "speed": 200.0,
+  "split_delta_z": 0.025
+ },
+ "bed_mesh default": {
+  "algo": "bicubic",
+  "max_x": 209.95999999999998,
+  "max_y": 215.0,
+  "mesh_x_pps": 4,
+  "mesh_y_pps": 4,
+  "min_x": 14.0,
+  "min_y": 11.0,
+  "points": [
+   [
+    0.4875,
+    0.335,
+    0.238333,
+    0.136667,
+    0.025833,
+    -0.070833,
+    -0.184167
+   ],
+   [
+    0.385833,
+    0.315,
+    0.2225,
+    0.124167,
+    0.010833,
+    -0.075,
+    -0.191667
+   ],
+   [
+    0.4625,
+    0.355,
+    0.2275,
+    0.095,
+    -0.0425,
+    -0.1625,
+    -0.310833
+   ],
+   [
+    0.415,
+    0.325833,
+    0.205,
+    0.070833,
+    -0.0575,
+    -0.178333,
+    -0.299167
+   ],
+   [
+    0.375833,
+    0.245833,
+    0.100833,
+    -0.035833,
+    -0.199167,
+    -0.329167,
+    -0.484167
+   ],
+   [
+    0.285,
+    0.178333,
+    0.043333,
+    -0.0725,
+    -0.21,
+    -0.325833,
+    -0.503333
+   ],
+   [
+    0.196667,
+    0.0475,
+    -0.115,
+    -0.230833,
+    -0.380833,
+    -0.505833,
+    -0.658333
+   ]
+  ],
+  "tension": 0.2,
+  "version": 1,
+  "x_count": 7,
+  "y_count": 7
+ },
+ "controller_fan controller_fan": {
+  "cycle_time": 0.01,
+  "fan_speed": 1.0,
+  "hardware_pwm": false,
+  "heater": [
+   "extruder"
+  ],
+  "idle_speed": 1.0,
+  "idle_timeout": 30,
+  "kick_start_time": 0.1,
+  "max_power": 1.0,
+  "off_below": 0.0,
+  "pin": "PB12",
+  "shutdown_speed": 0.0
+ },
+ "delayed_gcode _dry_filament_done": {
+  "gcode": "\nM140 S0\n_RESTORE_IDLE_TIMEOUT\nRESPOND MSG=\"Filament drying finished\"",
+  "initial_duration": 0.0
+ },
+ "delayed_gcode _reset_cancel": {
+  "gcode": "\nSET_GCODE_VARIABLE MACRO=CANCEL_PRINT VARIABLE=cancelled VALUE=False",
+  "initial_duration": 0.0
+ },
+ "extruder": {
+  "control": "pid",
+  "dir_pin": "PB14",
+  "enable_pin": "!PA15",
+  "filament_diameter": 1.75,
+  "full_steps_per_rotation": 200,
+  "gear_ratio": [],
+  "heater_pin": "PB8",
+  "inline_resistor": 0.0,
+  "instantaneous_corner_velocity": 1.0,
+  "max_extrude_cross_section": 5.0,
+  "max_extrude_only_accel": 5000.0,
+  "max_extrude_only_distance": 200.0,
+  "max_extrude_only_velocity": 80.0,
+  "max_power": 1.0,
+  "max_temp": 280.0,
+  "microsteps": 16,
+  "min_extrude_temp": 170.0,
+  "min_temp": 0.0,
+  "nozzle_diameter": 0.4,
+  "pid_kd": 90.189,
+  "pid_ki": 0.979,
+  "pid_kp": 18.789,
+  "pressure_advance": 0.04,
+  "pressure_advance_smooth_time": 0.04,
+  "pullup_resistor": 4700.0,
+  "pwm_cycle_time": 0.1,
+  "rotation_distance": 7.084,
+  "sensor_pin": "PC3",
+  "sensor_type": "ATC Semitec 104GT-2",
+  "smooth_time": 1.0,
+  "step_pin": "PB15"
+ },
+ "fan": {
+  "cycle_time": 5e-05,
+  "hardware_pwm": false,
+  "kick_start_time": 0.1,
+  "max_power": 1.0,
+  "off_below": 0.0,
+  "pin": "PB5",
+  "shutdown_speed": 0.0
+ },
+ "force_move": {
+  "enable_force_move": true
+ },
+ "gcode_arcs": {
+  "resolution": 1.0
+ },
+ "gcode_button pa0": {
+  "debounce_delay": 0.0,
+  "pin": "PA0",
+  "press_gcode": "\nQUERY_BUTTON button=pa0",
+  "release_gcode": "\nQUERY_BUTTON button=pa0"
+ },
+ "gcode_button pb4": {
+  "debounce_delay": 0.0,
+  "pin": "!PB4",
+  "press_gcode": "CANCEL_PRINT",
+  "release_gcode": ""
+ },
+ "gcode_macro _check_z_hit": {
+  "description": "G-Code macro",
+  "gcode": "\n{% set Z_POSITION = printer.toolhead.position.z | default(0) | float | round(3) %}\n{% set Z_PROBE_OFFSET = printer.configfile.settings.probe.z_offset | default(0) | float | round(3) %}\n{% set Z_PRINTBED_OFFSET = printer.save_variables.variables.z_printbed_offset | default(0.4) | float | round(3) %}\n\n{% if printer['gcode_button pa0'].state == \"PRESSED\" %}\nRESPOND TYPE=command MSG=\"Z-end button hit at {Z_POSITION}\"\nSAVE_VARIABLE VARIABLE=z_endstop_hit VALUE={Z_POSITION}\n{% set CALCULATED_Z_PROBE_OFFSET = Z_PROBE_OFFSET + Z_POSITION * -1 - Z_PRINTBED_OFFSET %}\nSAVE_VARIABLE VARIABLE=z_calculate_probe VALUE={CALCULATED_Z_PROBE_OFFSET}\nRESPOND TYPE=command MSG=\"Manually modify the probe z-offset in the printer.cfg to {CALCULATED_Z_PROBE_OFFSET}\"\n{% endif %}",
+  "variable_z_end": "0"
+ },
+ "gcode_macro _ensure_homed": {
+  "description": "Helper: home all axes if not homed",
+  "gcode": "\n{% if \"xyz\" not in printer.toolhead.homed_axes %}\nG28\n{% endif %}"
+ },
+ "gcode_macro _extrude": {
+  "description": "Helper: relative extrude (negative = retract) only if the nozzle is hot. LENGTH= SPEED=mm/s",
+  "gcode": "\n{% set length = params.LENGTH|default(0)|float %}\n{% set speed = params.SPEED|default(35)|float %}\n{% if length != 0 %}\n{% if printer.extruder.can_extrude %}\nSAVE_GCODE_STATE NAME=_extrude\nM83\nG1 E{length} F{speed * 60}\nRESTORE_GCODE_STATE NAME=_extrude\n{% else %}\nRESPOND MSG=\"Nozzle too cold - skipped extruding {length}mm\"\n{% endif %}\n{% endif %}"
+ },
+ "gcode_macro _filament_move": {
+  "description": "Helper: relative extruder move with save/restore. E= SPEED=mm/s",
+  "gcode": "\nSAVE_GCODE_STATE NAME=_fmove\nM83\nG1 E{params.E|float} F{params.SPEED|default(5)|float * 60}\nRESTORE_GCODE_STATE NAME=_fmove"
+ },
+ "gcode_macro _goto_tower": {
+  "description": "Helper: lift to tower_z, then move over the purge tower",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% set pos = printer.gcode_move.gcode_position %}\nSAVE_GCODE_STATE NAME=_tower\nG90\n{% if pos.z < s.tower_z %}\nG1 Z{s.tower_z} F{s.z_speed * 60}\n{% endif %}\nG1 X{s.tower_x} Y{s.tower_y} F{s.travel_speed * 60}\nG1 Z{s.tower_z} F{s.z_speed * 60}\nM400\nRESTORE_GCODE_STATE NAME=_tower"
+ },
+ "gcode_macro _heat_for_filament": {
+  "description": "Helper: heat for filament moves (paused: the print's temp; else current target or filament_temp)",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% set p = printer['gcode_macro PAUSE'] %}\n{% set min_temp = printer.configfile.settings.extruder.min_extrude_temp %}\n{% set temp = params.TEMP|default(0)|float %}\n{% if temp == 0 %}\n{% if printer.pause_resume.is_paused and p.extruder_temp >= min_temp %}\n{% set temp = p.extruder_temp %}\n{% elif printer.extruder.target >= min_temp %}\n{% set temp = printer.extruder.target %}\n{% else %}\n{% set temp = s.filament_temp %}\n{% endif %}\n{% endif %}\nRESPOND MSG=\"Heating nozzle to {temp|int}C\"\nM109 S{temp}"
+ },
+ "gcode_macro _move_z_down": {
+  "description": "G-Code macro",
+  "gcode": "\n{% if printer.save_variables.variables.z_endstop_hit == 0 %}\nG1 Z-0.01 F50\nM400\n_CHECK_Z_HIT\n{% endif %}"
+ },
+ "gcode_macro _park": {
+  "description": "Helper: lift by LIFT (at least to Z_MIN, never past Z max), then move to X/Y unless XY=0",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% if \"xyz\" not in printer.toolhead.homed_axes %}\nRESPOND MSG=\"Not homed - skipping park move\"\n{% else %}\n{% set origin = printer.gcode_move.homing_origin %}\n{% set pos = printer.gcode_move.gcode_position %}\n{% set amin = printer.toolhead.axis_minimum %}\n{% set amax = printer.toolhead.axis_maximum %}\n{% set lift = params.LIFT|default(s.park_lift)|float %}\n{% set z_min = params.Z_MIN|default(0)|float %}\n{% set z = [[pos.z + lift, z_min]|max, amax.z - origin.z - 2]|min %}\n{% set x = [[params.X|default(s.park_x)|float, amin.x - origin.x]|max, amax.x - origin.x]|min %}\n{% set y = [[params.Y|default(s.park_y)|float, amin.y - origin.y]|max, amax.y - origin.y]|min %}\nSAVE_GCODE_STATE NAME=_park\nG90\n{% if z > pos.z %}\nG1 Z{z} F{s.z_speed * 60}\n{% endif %}\n{% if params.XY|default(1)|int %}\nG1 X{x} Y{y} F{s.travel_speed * 60}\n{% endif %}\nRESTORE_GCODE_STATE NAME=_park\n{% endif %}"
+ },
+ "gcode_macro _printer_settings": {
+  "description": "Tunable values used by the macros in this file",
+  "gcode": "",
+  "variable_cancel_retract": "5.0",
+  "variable_end_lift": "10.0",
+  "variable_end_park_x": "20.0",
+  "variable_end_park_y": "200.0",
+  "variable_end_retract": "2.0",
+  "variable_filament_temp": "210",
+  "variable_load_length": "40.0",
+  "variable_load_purge": "20.0",
+  "variable_load_speed": "5.0",
+  "variable_m600_purge": "15.0",
+  "variable_m600_unload": "False",
+  "variable_m600_z_min": "50.0",
+  "variable_park_lift": "10.0",
+  "variable_park_x": "-5.0",
+  "variable_park_y": "200.0",
+  "variable_pause_idle_timeout": "3600",
+  "variable_pause_retract": "2.0",
+  "variable_probe_nozzle_temp": "150",
+  "variable_purge_length": "25.0",
+  "variable_purge_prime": "5.0",
+  "variable_resume_prime": "2.0",
+  "variable_retract_speed": "35.0",
+  "variable_start_mesh": "'adaptive'",
+  "variable_tower_x": "0.0",
+  "variable_tower_y": "0.0",
+  "variable_tower_z": "10.0",
+  "variable_travel_speed": "150.0",
+  "variable_unload_length": "100.0",
+  "variable_unload_speed": "30.0",
+  "variable_wipe_passes": "4",
+  "variable_wipe_x_end": "70.0",
+  "variable_wipe_x_start": "95.0",
+  "variable_wipe_y": "240.0",
+  "variable_z_speed": "8.0"
+ },
+ "gcode_macro _purge_line": {
+  "description": "Helper: prime line along the front edge",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\nSAVE_GCODE_STATE NAME=_purge\nG90\nM83\nG1 X70 Y-2 Z0.6 F2400\nG1 E{s.purge_prime} F600\nG1 X130 E{s.purge_length} F900\nG1 X140 F3000\nG1 Z1 F600\nG92 E0\nRESTORE_GCODE_STATE NAME=_purge"
+ },
+ "gcode_macro _restore_idle_timeout": {
+  "description": "Helper: put idle_timeout back to the printer.cfg value",
+  "gcode": "\nSET_IDLE_TIMEOUT TIMEOUT={printer.configfile.settings.idle_timeout.timeout}"
+ },
+ "gcode_macro _wipe": {
+  "description": "Helper: wipe the hot nozzle on the rear wiper and lift (needs homed axes)",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% set pos = printer.gcode_move.gcode_position %}\nSAVE_GCODE_STATE NAME=_wipe\nG90\n{% if pos.z < 5 %}\nG1 Z5 F{s.z_speed * 60}\n{% endif %}\nG1 X{s.wipe_x_start} Y{s.wipe_y} F{s.travel_speed * 60}\nG1 Z0 F{s.z_speed * 60}\n{% for i in range(s.wipe_passes|int) %}\nG1 X{s.wipe_x_end} F6000\nG1 X{s.wipe_x_start} F6000\n{% endfor %}\nG1 Z5 F{s.z_speed * 60}\nRESTORE_GCODE_STATE NAME=_wipe"
+ },
+ "gcode_macro cancel_print": {
+  "description": "Cancel: retract, heaters/fan off, park, clear pause state",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% if cancelled and not printer.pause_resume.is_paused %}\nRESPOND MSG=\"Cancel already done\"\n{% else %}\nSET_GCODE_VARIABLE MACRO=CANCEL_PRINT VARIABLE=cancelled VALUE=True\nUPDATE_DELAYED_GCODE ID=_RESET_CANCEL DURATION=30\n_EXTRUDE LENGTH=-{s.cancel_retract} SPEED={s.retract_speed}\nTURN_OFF_HEATERS\nM106 S0\n{% if not printer.pause_resume.is_paused %}\n_PARK X={s.end_park_x} Y={s.end_park_y} LIFT={s.end_lift}\n{% endif %}\nSET_PAUSE_NEXT_LAYER ENABLE=0\nSET_PAUSE_AT_LAYER ENABLE=0 LAYER=0\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=m600 VALUE=False\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=reason VALUE=\"'none'\"\nBED_MESH_CLEAR\n_RESTORE_IDLE_TIMEOUT\nCANCEL_PRINT_BASE\nRESPOND MSG=\"Print cancelled\"\n{% endif %}",
+  "rename_existing": "CANCEL_PRINT_BASE",
+  "variable_cancelled": "False"
+ },
+ "gcode_macro clean_nozzle": {
+  "description": "Heat, wipe on the rear wiper, cool down and re-home. CLEAN_NOZZLE [TEMP=220]",
+  "gcode": "\n{% set temp = params.TEMP|default(220)|float %}\n{% if printer.pause_resume.is_paused %}\nRESPOND TYPE=error MSG=\"CLEAN_NOZZLE is not allowed while paused (it re-homes)\"\n{% else %}\n_ENSURE_HOMED\nG90\nG1 Z10 F{8 * 60}\nM109 S{temp}\n_WIPE\nG90\nG1 Z0 F{8 * 60}\nM106 S255\nG1 X80 F6000\nM109 S150\nM106 S0\nM104 S0\nG1 Z10 F{8 * 60}\nG28\n{% endif %}"
+ },
+ "gcode_macro cooldown": {
+  "description": "Heaters and part fan off",
+  "gcode": "\nTURN_OFF_HEATERS\nM106 S0"
+ },
+ "gcode_macro dry_filament": {
+  "description": "Hold the bed hot to dry filament. DRY_FILAMENT [TEMP=60] [HOURS=3]",
+  "gcode": "\n{% set temp = params.TEMP|default(60)|float %}\n{% set hours = params.HOURS|default(3)|float %}\nM140 S{temp}\nSET_IDLE_TIMEOUT TIMEOUT={(hours * 3600 + 600)|int}\nUPDATE_DELAYED_GCODE ID=_DRY_FILAMENT_DONE DURATION={(hours * 3600)|int}\nRESPOND MSG=\"Drying at {temp|int}C for {hours} h. STOP_DRYING to end early.\""
+ },
+ "gcode_macro load_filament": {
+  "description": "Load. Idle: purge over the X0 tower then wipe. Paused: load at the park spot. [TEMP=] [LENGTH=] [PURGE=]",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% set length = params.LENGTH|default(s.load_length)|float %}\n{% set purge = params.PURGE|default(s.load_purge)|float %}\n{% if printer.pause_resume.is_paused %}\n_HEAT_FOR_FILAMENT TEMP={params.TEMP|default(0)}\n_FILAMENT_MOVE E={length + purge} SPEED={s.load_speed}\n_FILAMENT_MOVE E=-1 SPEED=30\n\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=m600 VALUE=False\nRESPOND MSG=\"Filament loaded at the park spot - RESUME when ready\"\n{% else %}\n_ENSURE_HOMED\n_GOTO_TOWER\n_HEAT_FOR_FILAMENT TEMP={params.TEMP|default(0)}\n_FILAMENT_MOVE E={length + purge} SPEED={s.load_speed}\n_FILAMENT_MOVE E=-1 SPEED=30\nG4 P1500\n_WIPE\nRESPOND MSG=\"Filament loaded, purged on the tower and nozzle wiped\"\n{% endif %}"
+ },
+ "gcode_macro m600": {
+  "description": "Filament change: park high, (optionally unload), wait for RESUME",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% if printer.pause_resume.is_paused %}\nRESPOND MSG=\"Already paused\"\n{% else %}\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=m600 VALUE=True\nPAUSE Z_MIN={s.m600_z_min} REASON=m600\n{% if s.m600_unload %}\nUNLOAD_FILAMENT\n{% endif %}\nRESPOND MSG=\"Filament change: UNLOAD_FILAMENT, insert new filament, LOAD_FILAMENT, then RESUME\"\n{% endif %}"
+ },
+ "gcode_macro mesh_calibrate": {
+  "description": "Heat bed, home, probe a full bed mesh and save it. MESH_CALIBRATE [BED_TEMP=60]",
+  "gcode": "\n{% set BED_TEMP = params.BED_TEMP|default(60)|float %}\nM104 S0\nM190 S{BED_TEMP}\nG28\nBED_MESH_CALIBRATE\nSAVE_VARIABLE VARIABLE=mesh_bed_temp VALUE={BED_TEMP}\nRESPOND PREFIX=\"info\" MSG=\"Bed mesh done - saving (Klipper will restart)\"\nSAVE_CONFIG"
+ },
+ "gcode_macro park": {
+  "description": "Park the toolhead. PARK [X=] [Y=] [LIFT=] [Z_MIN=]",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n_PARK X={params.X|default(s.park_x)} Y={params.Y|default(s.park_y)} LIFT={params.LIFT|default(s.park_lift)} Z_MIN={params.Z_MIN|default(0)}"
+ },
+ "gcode_macro pause": {
+  "description": "Pause: retract, lift and park. PAUSE [X=] [Y=] [Z_MIN=] [PARK=0 lifts only] [REASON=]",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% if printer.pause_resume.is_paused %}\nRESPOND MSG=\"Already paused\"\n{% else %}\n{% set x = params.X|default(s.park_x) %}\n{% set y = params.Y|default(s.park_y) %}\n{% set z_min = params.Z_MIN|default(0) %}\n{% set park_xy = params.PARK|default(1)|int %}\n{% set reason = params.REASON|default('layer' if layer_trigger else 'manual')|lower %}\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=reason VALUE=\"'{reason}'\"\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=layer_trigger VALUE=False\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=extruder_temp VALUE={printer.extruder.target}\nSET_IDLE_TIMEOUT TIMEOUT={s.pause_idle_timeout}\nPAUSE_BASE\n_EXTRUDE LENGTH=-{s.pause_retract} SPEED={s.retract_speed}\n_PARK X={x} Y={y} LIFT={s.park_lift} Z_MIN={z_min} XY={park_xy}\nRESPOND MSG=\"Paused. Nozzle held at {printer.extruder.target|int}C for {(s.pause_idle_timeout / 60)|int} min.\"\n{% endif %}",
+  "rename_existing": "PAUSE_BASE",
+  "variable_extruder_temp": "0",
+  "variable_layer_trigger": "False",
+  "variable_m600": "False",
+  "variable_reason": "'none'"
+ },
+ "gcode_macro pid_bed": {
+  "description": "PID tune the bed. PID_BED [TEMP=60]  (then SAVE_CONFIG)",
+  "gcode": "\nPID_CALIBRATE HEATER=heater_bed TARGET={params.TEMP|default(60)}\nRESPOND MSG=\"Run SAVE_CONFIG to keep the new values\""
+ },
+ "gcode_macro pid_hotend": {
+  "description": "PID tune the hotend. PID_HOTEND [TEMP=220]  (then SAVE_CONFIG)",
+  "gcode": "\nM106 S255\nPID_CALIBRATE HEATER=extruder TARGET={params.TEMP|default(220)}\nM106 S0\nRESPOND MSG=\"Run SAVE_CONFIG to keep the new values\""
+ },
+ "gcode_macro preheat": {
+  "description": "Heat without waiting. PREHEAT [MATERIAL=PLA|PETG|ABS|TPU]",
+  "gcode": "\n{% set presets = {'PLA': [210, 60], 'PETG': [240, 75], 'ABS': [250, 100], 'TPU': [225, 50]} %}\n{% set m = params.MATERIAL|default('PLA')|upper %}\n{% if m in presets %}\nM104 S{presets[m][0]}\nM140 S{presets[m][1]}\nRESPOND MSG=\"Preheating for {m}: nozzle {presets[m][0]}C, bed {presets[m][1]}C\"\n{% else %}\nRESPOND TYPE=error MSG=\"Unknown material {m} (use PLA, PETG, ABS or TPU)\"\n{% endif %}"
+ },
+ "gcode_macro print_end": {
+  "description": "Slicer end: retract, present the print, heaters/motors off",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n_EXTRUDE LENGTH=-{s.end_retract} SPEED={s.retract_speed}\nTURN_OFF_HEATERS\nM106 S0\n_PARK X={s.end_park_x} Y={s.end_park_y} LIFT={s.end_lift}\nM400\nBED_MESH_CLEAR\nSET_PAUSE_NEXT_LAYER ENABLE=0\nSET_PAUSE_AT_LAYER ENABLE=0 LAYER=0\n_RESTORE_IDLE_TIMEOUT\nM84\nRESPOND MSG=\"Print finished\""
+ },
+ "gcode_macro purge_filament": {
+  "description": "Purge. Idle: over the X0 tower then wipe. Paused: at the park spot. [LENGTH=20] [TEMP=]",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% set length = params.LENGTH|default(s.load_purge)|float %}\n{% if printer.pause_resume.is_paused %}\n_HEAT_FOR_FILAMENT TEMP={params.TEMP|default(0)}\n_FILAMENT_MOVE E={length} SPEED=5\n_FILAMENT_MOVE E=-1 SPEED=30\n{% else %}\n_ENSURE_HOMED\n_GOTO_TOWER\n_HEAT_FOR_FILAMENT TEMP={params.TEMP|default(0)}\n_FILAMENT_MOVE E={length} SPEED=5\n_FILAMENT_MOVE E=-1 SPEED=30\nG4 P1500\n_WIPE\n{% endif %}\nRESPOND MSG=\"Purged {length|int} mm\""
+ },
+ "gcode_macro resume": {
+  "description": "Resume: reheat if needed, prime and return. RESUME [KEEP_OFFSETS=1] [VELOCITY=]",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% set p = printer['gcode_macro PAUSE'] %}\n{% set velocity = params.VELOCITY|default(printer.configfile.settings.pause_resume.recover_velocity) %}\n{% set keep_offsets = params.KEEP_OFFSETS|default(0)|int %}\n{% set origin = printer.gcode_move.homing_origin %}\n{% if not printer.pause_resume.is_paused %}\nRESPOND MSG=\"Not paused - nothing to resume\"\n{% elif \"xyz\" not in printer.toolhead.homed_axes %}\nRESPOND TYPE=error MSG=\"Axes are no longer homed (motors were switched off) - this print cannot be resumed safely. Use CANCEL_PRINT.\"\n{% else %}\n{% if p.extruder_temp > 0 %}\n{% if printer.extruder.target < p.extruder_temp %}\nRESPOND MSG=\"Reheating nozzle to {p.extruder_temp|int}C\"\n{% endif %}\nM109 S{p.extruder_temp}\n{% endif %}\n{% if p.m600 %}\n_EXTRUDE LENGTH={s.m600_purge} SPEED=5\nG4 P1000\n{% endif %}\n_EXTRUDE LENGTH={s.resume_prime} SPEED={s.retract_speed}\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=m600 VALUE=False\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=reason VALUE=\"'none'\"\n_RESTORE_IDLE_TIMEOUT\nRESUME_BASE VELOCITY={velocity}\n{% if keep_offsets %}\n\nSET_GCODE_OFFSET X={origin.x} Y={origin.y} Z={origin.z} MOVE=1\n{% endif %}\n{% endif %}",
+  "rename_existing": "RESUME_BASE"
+ },
+ "gcode_macro set_pause_at_layer": {
+  "description": "Enable/disable a pause if a given layer number is reached",
+  "gcode": "\n{% set pause_at_layer = printer['gcode_macro SET_PRINT_STATS_INFO'].pause_at_layer %}\n{% set ENABLE = params.ENABLE | int != 0 if params.ENABLE is defined\nelse params.LAYER is defined %}\n{% set LAYER = params.LAYER | default(pause_at_layer.layer) | int %}\n{% set MACRO = params.MACRO | default(pause_at_layer.call, True) %}\nSET_GCODE_VARIABLE MACRO=SET_PRINT_STATS_INFO VARIABLE=pause_at_layer VALUE=\"{{ 'enable': ENABLE, 'layer': LAYER, 'call': MACRO }}\""
+ },
+ "gcode_macro set_pause_next_layer": {
+  "description": "Enable a pause if the next layer is reached",
+  "gcode": "\n{% set pause_next_layer = printer['gcode_macro SET_PRINT_STATS_INFO'].pause_next_layer %}\n{% set ENABLE = params.ENABLE | default(1)|int != 0 %}\n{% set MACRO = params.MACRO | default(pause_next_layer.call, True) %}\nSET_GCODE_VARIABLE MACRO=SET_PRINT_STATS_INFO VARIABLE=pause_next_layer VALUE=\"{{ 'enable': ENABLE, 'call': MACRO }}\""
+ },
+ "gcode_macro set_print_stats_info": {
+  "description": "Overwrite, to get pause_next_layer and pause_at_layer feature",
+  "gcode": "\n\nSET_PRINT_STATS_INFO_BASE {rawparams}\n{% if pause_next_layer.enable and params.CURRENT_LAYER is defined %}\nRESPOND TYPE=echo MSG='{\"%s, forced by pause_next_layer\" % pause_next_layer.call}'\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=layer_trigger VALUE=True\n{pause_next_layer.call}\nSET_PAUSE_NEXT_LAYER ENABLE=0\n{% elif pause_at_layer.enable and params.CURRENT_LAYER is defined and params.CURRENT_LAYER | int == pause_at_layer.layer %}\nRESPOND TYPE=echo MSG='{\"%s, forced by pause_at_layer [%d]\" % (pause_at_layer.call, pause_at_layer.layer)}'\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=layer_trigger VALUE=True\n{pause_at_layer.call}\nSET_PAUSE_AT_LAYER ENABLE=0\n{% endif %}",
+  "rename_existing": "SET_PRINT_STATS_INFO_BASE",
+  "variable_pause_at_layer": "{ 'enable': False, 'layer': 0, 'call': \"PAUSE\" }",
+  "variable_pause_next_layer": "{ 'enable': False, 'call': \"PAUSE\" }"
+ },
+ "gcode_macro start_print": {
+  "description": "Slicer start: START_PRINT EXTRUDER_TEMP=<t> BED_TEMP=<t> [MESH=saved|adaptive|none]",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% set BED_TEMP = params.BED_TEMP|default(60)|float %}\n{% set EXTRUDER_TEMP = params.EXTRUDER_TEMP|default(200)|float %}\n{% set MESH = params.MESH|default(s.start_mesh)|lower %}\n{% set PROBE_TEMP = [s.probe_nozzle_temp, EXTRUDER_TEMP]|min %}\n\nCLEAR_PAUSE\nSET_GCODE_VARIABLE MACRO=CANCEL_PRINT VARIABLE=cancelled VALUE=False\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=m600 VALUE=False\nSET_GCODE_VARIABLE MACRO=PAUSE VARIABLE=reason VALUE=\"'none'\"\nBED_MESH_CLEAR\n\n\nM140 S{BED_TEMP}\nM104 S{PROBE_TEMP}\nM190 S{BED_TEMP}\n\nG90\nG28\n\n{% if MESH == 'adaptive' %}\nBED_MESH_CALIBRATE ADAPTIVE=1\n{% elif MESH == 'saved' %}\nBED_MESH_PROFILE LOAD=\"default\"\n{% endif %}\n\n\nG1 X50 Y0 Z3 F{s.travel_speed * 60}\nM109 S{EXTRUDER_TEMP}\n_PURGE_LINE"
+ },
+ "gcode_macro stop_drying": {
+  "description": "End DRY_FILAMENT early",
+  "gcode": "\nUPDATE_DELAYED_GCODE ID=_DRY_FILAMENT_DONE DURATION=0\nM140 S0\n_RESTORE_IDLE_TIMEOUT\nRESPOND MSG=\"Drying stopped\""
+ },
+ "gcode_macro unload_filament": {
+  "description": "Unload. Idle: over the X0 tower. Paused: in place at the park spot. [TEMP=] [LENGTH=]",
+  "gcode": "\n{% set s = printer['gcode_macro _PRINTER_SETTINGS'] %}\n{% set length = params.LENGTH|default(s.unload_length)|float %}\n{% if not printer.pause_resume.is_paused %}\n_ENSURE_HOMED\n_GOTO_TOWER\n{% endif %}\n_HEAT_FOR_FILAMENT TEMP={params.TEMP|default(0)}\n_FILAMENT_MOVE E=10 SPEED=5\n_FILAMENT_MOVE E=-15 SPEED=50\nG4 P2000\n_FILAMENT_MOVE E=-{length - 15} SPEED={s.unload_speed}\nRESPOND MSG=\"Filament unloaded\""
+ },
+ "gcode_macro z_endstop_hit": {
+  "description": "G-Code macro",
+  "gcode": "\n{% set Z_ENDSTOP_HIT = printer.save_variables.variables.z_endstop_hit | default(0) | float | round(3) %}\nRESPOND TYPE=command MSG=\"Reset z_endstop_hit from {Z_ENDSTOP_HIT} to 0.0\"\nSAVE_VARIABLE VARIABLE=z_endstop_hit VALUE=0\nG90\nG1 X58.10 Y238.80 Z5 F8000\n\nM400\nG1 X58.10 Y238.80 Z3 F500\nM400\nG91\n{% set z_count = 500 %}\n{% for cz in range(z_count) %}\n_MOVE_Z_DOWN\n{% endfor %}"
+ },
+ "heater_bed": {
+  "control": "pid",
+  "heater_pin": "PB9",
+  "inline_resistor": 0.0,
+  "max_power": 1.0,
+  "max_temp": 120.0,
+  "min_extrude_temp": 170.0,
+  "min_temp": 0.0,
+  "pid_kd": 1164.599,
+  "pid_ki": 0.665,
+  "pid_kp": 55.656,
+  "pullup_resistor": 4700.0,
+  "pwm_cycle_time": 0.1,
+  "sensor_pin": "PC1",
+  "sensor_type": "EPCOS 100K B57560G104F",
+  "smooth_time": 1.0
+ },
+ "heater_fan extruder_fan": {
+  "cycle_time": 0.01,
+  "fan_speed": 1.0,
+  "hardware_pwm": false,
+  "heater": [
+   "extruder"
+  ],
+  "heater_temp": 50.0,
+  "kick_start_time": 0.1,
+  "max_power": 1.0,
+  "off_below": 0.0,
+  "pin": "PB13",
+  "shutdown_speed": 1.0
+ },
+ "idle_timeout": {
+  "gcode": "\n{% if printer.pause_resume.is_paused %}\nM104 S0\nRESPOND TYPE=error MSG=\"Paused too long: hotend switched off, bed and motors kept on. RESUME will reheat.\"\n{% else %}\nTURN_OFF_HEATERS\nM84\n{% endif %}",
+  "timeout": 600.0
+ },
+ "input_shaper": {
+  "damping_ratio_x": 0.1,
+  "damping_ratio_y": 0.1,
+  "damping_ratio_z": 0.1,
+  "shaper_freq_x": 54.8,
+  "shaper_freq_y": 34.0,
+  "shaper_freq_z": 0.0,
+  "shaper_type": "mzv",
+  "shaper_type_x": "ei",
+  "shaper_type_y": "mzv",
+  "shaper_type_z": "mzv"
+ },
+ "mcu": {
+  "baud": 115200,
+  "restart_method": "command",
+  "serial": "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
+ },
+ "output_pin enable_pin": {
+  "pin": "PB6",
+  "pwm": false,
+  "shutdown_value": 0.0,
+  "value": 1.0
+ },
+ "pause_resume": {
+  "recover_velocity": 100.0
+ },
+ "printer": {
+  "kinematics": "cartesian",
+  "max_accel": 10000.0,
+  "max_velocity": 300.0,
+  "max_z_accel": 800.0,
+  "max_z_velocity": 8.0,
+  "minimum_cruise_ratio": 0.5,
+  "square_corner_velocity": 5.0
+ },
+ "probe": {
+  "activate_gcode": "",
+  "deactivate_gcode": "",
+  "deactivate_on_each_sample": true,
+  "lift_speed": 8.0,
+  "pin": "PA1",
+  "sample_retract_dist": 2.0,
+  "samples": 3,
+  "samples_result": "average",
+  "samples_tolerance": 0.1,
+  "samples_tolerance_retries": 3,
+  "speed": 15.0,
+  "x_offset": 24.0,
+  "y_offset": 13.35,
+  "z_offset": 1.1
+ },
+ "respond": {
+  "default_prefix": "",
+  "default_type": "echo"
+ },
+ "safe_z_home": {
+  "home_xy_position": [
+   110.0,
+   110.0
+  ],
+  "move_to_previous": false,
+  "speed": 100.0,
+  "z_hop": 5.0,
+  "z_hop_speed": 15.0
+ },
+ "save_variables": {
+  "filename": "~/printer_data/config/variables.cfg"
+ },
+ "stepper_x": {
+  "dir_pin": "PA11",
+  "enable_pin": "!PA15",
+  "endstop_pin": "^!PB11",
+  "full_steps_per_rotation": 200,
+  "gear_ratio": [],
+  "homing_positive_dir": false,
+  "homing_retract_dist": 5.0,
+  "homing_retract_speed": 100.0,
+  "homing_speed": 100.0,
+  "microsteps": 16,
+  "position_endstop": -10.0,
+  "position_max": 235.0,
+  "position_min": -14.0,
+  "rotation_distance": 40.0,
+  "second_homing_speed": 50.0,
+  "step_pin": "PA12"
+ },
+ "stepper_y": {
+  "dir_pin": "!PA8",
+  "enable_pin": "!PA15",
+  "endstop_pin": "^!PC13",
+  "full_steps_per_rotation": 200,
+  "gear_ratio": [],
+  "homing_positive_dir": false,
+  "homing_retract_dist": 5.0,
+  "homing_retract_speed": 100.0,
+  "homing_speed": 100.0,
+  "microsteps": 16,
+  "position_endstop": -2.0,
+  "position_max": 240.0,
+  "position_min": -3.0,
+  "rotation_distance": 40.0,
+  "second_homing_speed": 50.0,
+  "step_pin": "PA9"
+ },
+ "stepper_z": {
+  "dir_pin": "!PB1",
+  "enable_pin": "!PA15",
+  "endstop_pin": "probe:z_virtual_endstop",
+  "full_steps_per_rotation": 200,
+  "gear_ratio": [],
+  "homing_positive_dir": false,
+  "homing_retract_dist": 5.0,
+  "homing_retract_speed": 15.0,
+  "homing_speed": 15.0,
+  "microsteps": 16,
+  "position_max": 250.0,
+  "position_min": -4.0,
+  "rotation_distance": 8.0,
+  "second_homing_speed": 1.0,
+  "step_pin": "PB0"
+ },
+ "temperature_sensor mcu_temp": {
+  "max_temp": 100.0,
+  "min_temp": 0.0,
+  "sensor_mcu": "mcu",
+  "sensor_type": "temperature_mcu"
+ },
+ "verify_heater extruder": {
+  "check_gain_time": 20.0,
+  "heating_gain": 2.0,
+  "hysteresis": 5.0,
+  "max_error": 120.0
+ },
+ "verify_heater heater_bed": {
+  "check_gain_time": 60.0,
+  "heating_gain": 2.0,
+  "hysteresis": 5.0,
+  "max_error": 120.0
+ },
+ "virtual_sdcard": {
+  "on_error_gcode": "CANCEL_PRINT",
+  "path": "~/printer_data/gcodes"
+ }
+}
