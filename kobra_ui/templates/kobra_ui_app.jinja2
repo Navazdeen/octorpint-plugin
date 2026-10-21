@@ -58,6 +58,13 @@
               <div class="v" id="kui-v-webcam" data-bind="visible: viewMode() === 'webcam'">
                 <img id="kui-webcam" alt="Live webcam of the printer">
                 <div class="v-empty" data-bind="visible: !webcamUrl()"><i class="fa-solid fa-video-slash"></i>No webcam stream is set up in OctoPrint</div>
+                <div class="camchip" data-bind="visible: webcamUrl() && camState() === 'live'" aria-hidden="true"><i class="dot"></i>Live<span class="num" data-bind="visible: camFps() > 0, text: camFps() + ' fps'"></span></div>
+                <div class="camwait" role="status" aria-live="polite" data-bind="visible: webcamUrl() && (camState() === 'connecting' || camState() === 'retrying'), css: { retrying: camState() === 'retrying' }">
+                  <span class="spin" aria-hidden="true"></span>
+                  <span data-bind="visible: camState() === 'connecting'">Connecting to the camera…</span>
+                  <span data-bind="visible: camState() === 'retrying'">Camera stream lost. Reconnecting<span class="num" data-bind="visible: camRetryIn() > 0, text: ' in ' + camRetryIn() + ' s'"></span>…</span>
+                  <button class="kb sm" data-bind="visible: camState() === 'retrying', click: camRetryNow"><i class="fa-solid fa-rotate-right"></i>Retry now</button>
+                </div>
               </div>
               <div class="v" id="kui-v-3d" data-bind="visible: viewMode() === '3d'">
                 <div class="v-empty" data-bind="visible: !has3d()"><i class="fa-solid fa-cube"></i>Install PrettyGCode to see the 3D toolpath</div>

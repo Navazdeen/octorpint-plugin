@@ -1304,18 +1304,102 @@ $(function () {
         self.has2d = ko.observable(false);
         self.viewMode = ko.observable(store("viewMode") || "3d");
         self.webcamUrl = ko.pureComputed(function () {
-            var s = self.settings.settings, cw = s.plugins && s.plugins.classicwebcam;
+            var s = self.settings.settings; if (!s) return "";
+            var cw = s.plugins && s.plugins.classicwebcam;
             return (cw && cw.stream && cw.stream()) || (s.webcam && s.webcam.streamUrl && s.webcam.streamUrl()) || "";
         });
+        /* Webcam: read the MJPEG stream with fetch instead of a plain <img src>, so every frame is seen.
+           A plain img freezes forever on a network blip; here a stall (no frame for 5 s) or a dropped
+           connection reconnects with backoff, and the stream stops while the tab is hidden. */
+        self.camState = ko.observable("off");   // off | connecting | live | retrying
+        self.camFps = ko.observable(0);
+        self.camRetryIn = ko.observable(0);
+        var cam = (function () {
+            var url = "", ctrl = null, timer = null, tick = null, fails = 0, lastFrame = 0, frames = 0, fpsAt = 0, shown = null, gen = 0;
+            var STALL = 5000, img = function () { return document.getElementById("kui-webcam"); };
+            function clear() { clearTimeout(timer); clearInterval(tick); timer = tick = null; if (ctrl) { try { ctrl.abort(); } catch (e) {} ctrl = null; } }
+            function stop() { clear(); gen++; self.camState("off"); self.camFps(0); }
+            function show(blob) {
+                var el = img(); if (!el) return;
+                var u = URL.createObjectURL(blob), prev = shown; shown = u;
+                el.onload = function () { if (prev) URL.revokeObjectURL(prev); };
+                el.src = u;
+            }
+            function retry(why) {
+                clear();
+                if (!url || document.hidden) { self.camState("off"); return; }
+                fails++;
+                var wait = Math.min(10, Math.pow(2, Math.min(fails, 4) - 1));   // 1, 2, 4, 8, 10 s
+                self.camState("retrying"); self.camFps(0); self.camRetryIn(wait);
+                var my = gen;
+                tick = setInterval(function () { if (my === gen) self.camRetryIn(Math.max(0, self.camRetryIn() - 1)); }, 1000);
+                timer = setTimeout(function () { if (my === gen) connect(); }, wait * 1000);
+            }
+            function indexOf(buf, len, pat, from) {
+                outer: for (var i = from || 0; i <= len - pat.length; i++) { for (var j = 0; j < pat.length; j++) if (buf[i + j] !== pat[j]) continue outer; return i; }
+                return -1;
+            }
+            var SOI = [0xff, 0xd8], EOI = [0xff, 0xd9];
+            function connect() {
+                clear();
+                if (!url || document.hidden) { self.camState("off"); return; }
+                var my = ++gen;
+                if (!window.fetch || !window.ReadableStream || !window.AbortController) {   // very old browser: plain img, retried on error
+                    var el = img(); self.camState("live");
+                    el.onerror = function () { if (my === gen) retry("error"); };
+                    el.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "_kui=" + Date.now();
+                    return;
+                }
+                self.camState(self.camState() === "live" ? "live" : "connecting");
+                ctrl = new AbortController();
+                lastFrame = Date.now(); frames = 0; fpsAt = Date.now();
+                tick = setInterval(function () {
+                    if (my !== gen) return;
+                    var now = Date.now();
+                    if (now - lastFrame > STALL) { retry("stall"); return; }
+                    if (now - fpsAt >= 2000) { self.camFps(Math.round(frames * 1000 / (now - fpsAt))); frames = 0; fpsAt = now; }
+                }, 500);
+                fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "_kui=" + Date.now(), { signal: ctrl.signal, cache: "no-store" }).then(function (res) {
+                    if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
+                    var reader = res.body.getReader(), buf = new Uint8Array(1 << 18), len = 0;
+                    function pump() {
+                        return reader.read().then(function (r) {
+                            if (my !== gen) { reader.cancel().catch(function () {}); return; }
+                            if (r.done) throw new Error("stream ended");
+                            var c = r.value;
+                            if (len + c.length > buf.length) {   // grow, but never past 8 MB of junk
+                                if (len + c.length > (8 << 20)) len = 0;
+                                var nb = new Uint8Array(Math.max(buf.length * 2, len + c.length)); nb.set(buf.subarray(0, len)); buf = nb;
+                            }
+                            buf.set(c, len); len += c.length;
+                            for (;;) {   // cut out every complete JPEG (SOI ... EOI) in the buffer
+                                var a = indexOf(buf, len, SOI, 0); if (a < 0) { if (len) { buf[0] = buf[len - 1]; len = 1; } break; }
+                                var b = indexOf(buf, len, EOI, a + 2); if (b < 0) { if (a > 0) { buf.copyWithin(0, a, len); len -= a; } break; }
+                                show(new Blob([buf.slice(a, b + 2)], { type: "image/jpeg" }));
+                                lastFrame = Date.now(); frames++; fails = 0;
+                                if (self.camState() !== "live") self.camState("live");
+                                buf.copyWithin(0, b + 2, len); len -= b + 2;
+                            }
+                            return pump();
+                        });
+                    }
+                    return pump();
+                }).catch(function () { if (my === gen && ctrl && !ctrl.signal.aborted) retry("error"); });
+            }
+            document.addEventListener("visibilitychange", function () {
+                if (!url) return;
+                if (document.hidden) { clear(); gen++; self.camState("off"); } else { fails = 0; connect(); }
+            });
+            return {
+                want: function (u) { if (u === url) { if (u && self.camState() === "off") connect(); return; } url = u; fails = 0; if (u) connect(); else stop(); },
+                now: function () { fails = 0; connect(); }
+            };
+        })();
+        self.camRetryNow = function () { cam.now(); };
         self.setViewMode = function (m) { self.viewMode(m); store("viewMode", m); self.syncViewer(); };
         self.syncViewer = function () {
             var live = $("html").hasClass("kui-on") && self.route() === "printer", mode = self.viewMode();
-            var img = document.getElementById("kui-webcam");
-            if (img) {
-                var want = live && mode === "webcam" ? self.webcamUrl() : "";
-                if (want && img.getAttribute("data-src") !== want) { img.src = want + (want.indexOf("?") >= 0 ? "&" : "?") + "_kui=" + Date.now(); img.setAttribute("data-src", want); }
-                else if (!want && img.getAttribute("data-src")) { img.removeAttribute("src"); img.removeAttribute("data-src"); }
-            }
+            cam.want(live && mode === "webcam" ? self.webcamUrl() : "");
             try {
                 if (self.prettyVM && self.prettyVM.onTabChange) self.prettyVM.onTabChange(live && mode === "3d" ? "#tab_plugin_prettygcode" : "#kui", live && mode === "3d" ? "#kui" : "#tab_plugin_prettygcode");
                 if (self.gcodeVM && self.gcodeVM.onTabChange) self.gcodeVM.onTabChange(live && mode === "2d" ? "#gcode" : "#kui", "#kui");
@@ -1443,6 +1527,7 @@ $(function () {
             self.loadSystemCommands();
             applyUrl();
             self.syncViewer();
+            self.webcamUrl.subscribe(function () { self.syncViewer(); });   // settings are loaded by now
             if (window.ResizeObserver) {
                 var ro = new ResizeObserver(schedulePack);
                 $("#kui-canvas > .card").each(function () { ro.observe(this); });

@@ -207,6 +207,15 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .pane .v-empty { position: absolute; inset: 0; display: flex; gap: 8px; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
 #kui #kui-v-webcam { display: grid; place-items: center; }
 #kui #kui-webcam { max-width: 100%; max-height: 100%; object-fit: contain; }
+#kui .camchip { position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: 999px; background: rgba(13,12,16,.72); backdrop-filter: blur(6px); font-size: var(--fs-small); color: var(--text); pointer-events: none; }
+#kui .camchip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--positive); box-shadow: 0 0 0 3px rgba(68,162,130,.22); }
+#kui .camchip .num { color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+#kui .camwait { position: absolute; inset: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; padding: 16px; text-align: center; background: rgba(13,12,16,.55); backdrop-filter: blur(2px); color: var(--text); font-size: var(--fs-body); }
+#kui .camwait.retrying { background: rgba(13,12,16,.72); }
+#kui .camwait .num { font-variant-numeric: tabular-nums; }
+#kui .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); border-top-color: var(--accent); animation: kui-spin .8s linear infinite; flex: none; }
+@keyframes kui-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #kui .spin { animation-duration: 2.4s; } }
 #kui #kui-v-3d #pg-container { position: absolute; inset: 0; width: 100% !important; height: 100% !important; margin: 0; }
 #kui #kui-v-3d #pg-container .pg-view { height: 100% !important; }
 /* the 2D viewer keeps its own markup; fit2d() sizes its canvas and sliders to the pane */

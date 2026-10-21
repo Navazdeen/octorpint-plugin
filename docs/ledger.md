@@ -43,4 +43,11 @@ Klipper is deployed while a print is running.
 | V7 | Deploys no longer need the password: SSH key login to the Cubie, OctoPrint restarted via its API (tools/deploy.sh); password helper deleted | done |
 | V5 | deploy.sh only refused to restart while Klipper reported Printing; a paused print would have been killed. Now also refuses while paused | fixed |
 
+## Webcam drops (2026-10-21)
+
+| # | Issue | Status |
+|---|---|---|
+| W1 | Live webcam sometimes freezes or goes blank, then comes back. Cause: mjpg-streamer itself never crashed (one start per boot, no errors, 8 fps steady over 90 s), but the Cubie's Wi-Fi (AIC8800) ran with power saving on, which holds packets while dozing (ping spikes to 67 ms), and the UI's plain `<img src>` never recovers once an MJPEG connection stalls | fixed: Wi-Fi power save off now (`iwconfig`) and on every boot (`/etc/NetworkManager/conf.d/99-wifi-powersave-off.conf`) |
+| W2 | UI webcam had no recovery or status. Now reads the stream with fetch: a stall (no frame for 5 s) or a dropped connection reconnects with backoff (1, 2, 4, 8, 10 s), shows "Reconnecting in N s" with Retry now, a Live + fps chip, and stops streaming while the tab is hidden or another view is shown. Also follows webcam URL changes from Settings | deployed + verified (`tools/shot/cam.js`: stall caught at 5.0 s, live again 1.2 s later) |
+
 Verification: `tools/shot/verify.js` + `probe8.js` (U1, U3–U12 pass; print-only states simulated in the browser only).
