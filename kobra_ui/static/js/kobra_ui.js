@@ -657,7 +657,7 @@ $(function () {
         /* ====================== routing ============================= */
         self.route = ko.observable("printer");
         // OctoPrint owns location.hash for its tabs, so the app routes on ?kui=<view>[&cfg=<file>]
-        var ROUTES = ["printer", "files", "mesh", "klipper", "editor"];
+        var ROUTES = ["printer", "macros", "files", "mesh", "klipper", "editor"];
         function readUrl() {
             var q = new URLSearchParams(window.location.search);
             var r = q.get("kui");
@@ -1682,6 +1682,8 @@ $(function () {
             setTimeout(function () { self.pack(); self.measureBars(); }, 300);
             if (document.fonts && document.fonts.ready) document.fonts.ready.then(self.pack);
         };
+        // macro deck, quick macros and the Ctrl+K palette live in kobra_deck.js
+        if (window.KobraDeck) window.KobraDeck(self, { PLUGIN: PLUGIN, store: store, esc: esc, num: num, k: k, schedulePack: schedulePack });
     }
 
     OCTOPRINT_VIEWMODELS.push({

@@ -66,3 +66,9 @@ def test_usage_flush(tmp_path, log):
     s.bump_usage("park")
     s.flush_usage(force=True)
     assert s.load(MS)["usage"] == {"PARK": 1}
+
+
+def test_no_default_written_before_klipper_answers(tmp_path, log):
+    d = DeckStore(str(tmp_path), log).load([])  # no macros known yet
+    assert not (tmp_path / "deck.json").exists() and d["version"] == 0
+    assert DeckStore(str(tmp_path), log).load(MS)["groups"][0]["items"][0] == "LOAD_FILAMENT"

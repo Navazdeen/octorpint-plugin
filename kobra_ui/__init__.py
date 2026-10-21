@@ -18,6 +18,9 @@ import flask
 import octoprint.plugin
 from octoprint.access.permissions import Permissions
 
+from . import macros as kmacros
+from .deck_store import Conflict, DeckStore
+
 KLIPPY_SOCKET = os.path.expanduser("~/printer_data/comms/klippy.sock")
 KLIPPY_LOG = os.path.expanduser("~/printer_data/logs/klippy.log")
 CONFIG_DIR = os.path.expanduser("~/printer_data/config")
@@ -182,15 +185,36 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
         self._console_pending = []
         self._console_lock = threading.Lock()
         self._awaiting_ok = 0
+        self._macros = []
+        self._macros_lock = threading.Lock()
+        self._deck = None
 
     # --- startup ----------------------------------------------------------
     def on_after_startup(self):
+        self._deck = DeckStore(self.get_plugin_data_folder(), self._logger)
         self._watcher = KlippyWatcher(self._logger, self._push_klipper)
         self._watcher.start()
         threading.Thread(target=self._console_flusher, daemon=True, name="kobra_ui-console").start()
 
     def _push_klipper(self, payload):
         self._plugin_manager.send_plugin_message(self._identifier, {"klipper": payload})
+        for part in ("status", "delta"):
+            settings = ((payload.get(part) or {}).get("configfile") or {}).get("settings")
+            if settings:
+                self._refresh_macros(settings)
+
+    def _refresh_macros(self, settings):
+        """Rebuild the deck's macro list; Klipper re-sends configfile after every restart."""
+        try:
+            parsed = kmacros.parse_macros(settings)
+        except Exception:
+            self._logger.exception("Couldn't read the macros from Klipper's config")
+            return
+        with self._macros_lock:
+            changed = [m["name"] for m in parsed] != [m["name"] for m in self._macros]
+            self._macros = parsed
+        if changed:
+            self._plugin_manager.send_plugin_message(self._identifier, {"macros_changed": True})
 
     # --- console capture --------------------------------------------------
     def _add_console(self, kind, text):
@@ -237,7 +261,7 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
         return True
 
     def get_api_commands(self):
-        return {"estop": [], "run": ["script"]}
+        return {"estop": [], "run": ["script"], "run_macro": ["macro"]}
 
     def on_api_command(self, command, data):
         if command == "estop":
@@ -251,6 +275,8 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
                 sock.close()
             self._logger.warning("Emergency stop requested from the Kobra UI")
             return flask.jsonify({"sent": True})
+        if command == "run_macro":
+            return self._run_macro(data)
         if command == "run":
             # A button's G-code goes straight to Klipper so the UI learns when it finished and why it failed
             # (gcode/script answers only once the script is done, with Klipper's own error text). It runs in
@@ -266,6 +292,22 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
             self._add_console("send", script)
             threading.Thread(target=self._run_script, args=(rid, script), daemon=True, name="kobra_ui-run").start()
             return flask.jsonify({"accepted": True, "id": rid})
+
+    def _run_macro(self, data):
+        if not Permissions.CONTROL.can():
+            return flask.abort(403)
+        with self._macros_lock:
+            known = list(self._macros)
+        try:
+            script = kmacros.build_script(known, data.get("macro"), data.get("params") or {})
+        except ValueError as exc:
+            return flask.make_response(flask.jsonify({"error": str(exc)}), 400)
+        rid = str(data.get("id") or "")[:40]
+        self._add_console("send", script)
+        threading.Thread(target=self._run_script, args=(rid, script), daemon=True, name="kobra_ui-run").start()
+        if self._deck:
+            self._deck.bump_usage(str(data.get("preset") and "preset:" + str(data["preset"]) or script.split(" ", 1)[0]))
+        return flask.jsonify({"accepted": True, "id": rid})
 
     def _run_script(self, rid, script):
         started = time.time()
@@ -314,6 +356,41 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
 
     def is_blueprint_protected(self):
         return True
+
+    # --- macro deck ------------------------------------------------------------
+    @octoprint.plugin.BlueprintPlugin.route("/macros", methods=["GET"])
+    def macros_get(self):
+        if not Permissions.CONTROL.can():
+            flask.abort(403)
+        with self._macros_lock:
+            known = list(self._macros)
+        ready = bool(self._watcher and self._watcher.snapshot().get("status", {}).get("webhooks", {}).get("state") == "ready")
+        return flask.jsonify({"macros": known, "deck": self._deck.load(known), "klipper_ready": ready})
+
+    @octoprint.plugin.BlueprintPlugin.route("/deck", methods=["POST"])
+    def deck_save(self):
+        if not Permissions.SETTINGS.can():
+            flask.abort(403)
+        body = flask.request.get_json(silent=True) or {}
+        try:
+            return flask.jsonify(self._deck.save(body.get("deck") or {}, int(body.get("base_version", -1))))
+        except Conflict as exc:
+            return flask.make_response(flask.jsonify({"current": exc.current}), 409)
+        except (ValueError, TypeError) as exc:
+            return flask.make_response(flask.jsonify({"error": str(exc)}), 400)
+
+    @octoprint.plugin.BlueprintPlugin.route("/config/outline", methods=["GET"])
+    def config_outline(self):
+        files = {}
+        for item in _list_configs():
+            if item.get("folder"):
+                continue
+            try:
+                with open(os.path.join(CONFIG_DIR, item["name"]), encoding="utf-8") as f:
+                    files[item["name"]] = f.read()
+            except OSError:
+                continue
+        return flask.jsonify(kmacros.config_outline(files))
 
     @octoprint.plugin.BlueprintPlugin.route("/config", methods=["GET"])
     def config_list(self):
@@ -393,7 +470,7 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
         return True
 
     def get_assets(self):
-        return {"js": ["js/kobra_ui.js"], "css": ["css/kobra_ui.css"]}
+        return {"js": ["js/kobra_deck.js", "js/kobra_ui.js"], "css": ["css/kobra_ui.css"]}
 
     def get_template_configs(self):
         return [{"type": "generic", "template": "kobra_ui_app.jinja2", "custom_bindings": True}]
@@ -487,7 +564,7 @@ def _history(name):
 
 
 __plugin_name__ = "Kobra UI"
-__plugin_version__ = "2.6.2"
+__plugin_version__ = "2.7.0"
 __plugin_description__ = "Full-screen console for the Kobra 2 Neo on OctoPrint + Klipper"
 __plugin_pythoncompat__ = ">=3.9,<4"
 __plugin_implementation__ = KobraUiPlugin()

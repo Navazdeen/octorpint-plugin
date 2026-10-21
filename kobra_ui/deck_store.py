@@ -60,7 +60,8 @@ class DeckStore:
                     except (OSError, ValueError):
                         continue
         deck = _macros.default_deck(macros)
-        self._write(deck)
+        if macros:  # don't keep an empty deck made before Klipper answered
+            self._write(deck)
         return deck
 
     # --- writing -------------------------------------------------------------
