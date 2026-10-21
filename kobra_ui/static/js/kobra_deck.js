@@ -227,7 +227,7 @@ window.KobraDeck = function (self, h) {
     // run a deck entry; the plugin builds and checks the command line
     self.runMacro = function (name, params, tile) {
         var id = self.newRunId(), shown = [name].concat(Object.keys(params || {}).map(function (k) { return k + "=" + params[k]; })).join(" ");
-        var el = tile ? document.querySelector('#kui .tile[data-name="' + tile.key + '"]') : null;
+        var el = tile ? document.querySelector('#kui .mtile[data-name="' + tile.key + '"]') : null;
         self.runFeedback(id, shown, function (good) { flash(el, good); });
         OctoPrint.simpleApiCommand(PLUGIN, "run_macro", { macro: name, params: params || {}, id: id, preset: tile && tile.preset ? tile.key.slice(7) : undefined })
             .fail(function (x) {
@@ -250,12 +250,12 @@ window.KobraDeck = function (self, h) {
     self.runSelected = function () { var t = self.selTile(); if (t && self.selRunEnabled()) self.runTile(t, self.selValues()); };
     self.sheetOpen = ko.observable(false);
     function phone() { return window.matchMedia && window.matchMedia("(max-width: 760px)").matches; }
-    self.tileClick = function (t) { if (!self.deckEdit()) { self.selectTile(t); if (phone()) self.sheetOpen(true); } return true; };
+    self.deckTileClick = function (t) { if (!self.deckEdit()) { self.selectTile(t); if (phone()) self.sheetOpen(true); } return true; };
     self.closeSheet = function () { self.sheetOpen(false); };
     // run with the values in the panel when this tile is already selected (spec §2.1: "with the current values")
     function selectKeep(t) { if (self.selMacro() !== t.key) self.selectTile(t); }
-    self.tileDblClick = function (t) { if (!self.deckEdit()) { selectKeep(t); self.runSelected(); } };
-    self.tileKey = function (t, e) {
+    self.deckTileDblClick = function (t) { if (!self.deckEdit()) { selectKeep(t); self.runSelected(); } };
+    self.deckTileKey = function (t, e) {
         // only the tile itself: keys on its menu buttons (edit mode) belong to those buttons
         if (e.target !== e.currentTarget || self.deckEdit()) return true;
         if (e.key === "Enter") { selectKeep(t); self.runSelected(); return false; }
@@ -264,7 +264,7 @@ window.KobraDeck = function (self, h) {
     self.quickRun = function (t) { self.runTile(t, null); };
     self.quickBlocked = function (t) { return !!blockReason(t); };
     self.tileClass = function (t) {
-        return "tile" + (self.selMacro() === t.key ? " sel" : "") + (t.color ? " c-" + t.color : "") + (t.hidden ? " is-hidden" : "") + (t.missing ? " missing" : "");
+        return "mtile" + (self.selMacro() === t.key ? " sel" : "") + (t.color ? " c-" + t.color : "") + (t.hidden ? " is-hidden" : "") + (t.missing ? " missing" : "");
     };
     self.hasHint = function (t, hint) { return t.hints.indexOf(hint) >= 0; };
     self.flagHtml = function (t) {
@@ -323,7 +323,7 @@ window.KobraDeck = function (self, h) {
         self.openMenu(null);
         editSave(function (d) { toggleIn(d.pinned, t.key); }, (t.pinned ? "Removed " : "Pinned ") + t.label + (t.pinned ? " from" : " to") + " the Printer screen");
         if (!t.pinned && !reduced()) setTimeout(function () {
-            var i = document.querySelector('#kui .tile[data-name="' + t.key + '"] .pinmark i');
+            var i = document.querySelector('#kui .mtile[data-name="' + t.key + '"] .pinmark i');
             anim(i, [{ transform: "scale(1)" }, { transform: "scale(1.25)", offset: .45 }, { transform: "scale(1)" }], 240);
         }, 0);
     };
@@ -367,7 +367,7 @@ window.KobraDeck = function (self, h) {
     }
     function lastNode(box) { return box.lastElementChild; }
     function pastLast(box, e) {
-        var tiles = Array.prototype.filter.call(box.children, function (c) { return c !== drag.el && c.classList.contains("tile"); });
+        var tiles = Array.prototype.filter.call(box.children, function (c) { return c !== drag.el && c.classList.contains("mtile"); });
         if (!tiles.length) return true;
         var r = tiles[tiles.length - 1].getBoundingClientRect();
         return e.clientY > r.bottom || (e.clientY >= r.top && e.clientX > r.right);
@@ -377,7 +377,7 @@ window.KobraDeck = function (self, h) {
         var zone = under && under.closest && under.closest("#kui .newgroup");
         $("#kui .newgroup").toggleClass("over", !!zone); drag.toNew = !!zone;
         if (zone || !under || !under.closest) return;
-        var t = under.closest("#kui-deck .tile"), lab = under.closest("#kui-deck .lbl3"), box = under.closest("#kui-deck");
+        var t = under.closest("#kui-deck .mtile"), lab = under.closest("#kui-deck .lbl3"), box = under.closest("#kui-deck");
         var mutate = null;
         if (t && t !== drag.el) {
             var r = t.getBoundingClientRect(), before = e.clientX < r.left + r.width / 2;
@@ -394,7 +394,7 @@ window.KobraDeck = function (self, h) {
     }
     function onDown(e) {
         if (!self.deckEdit() || self.deckView() !== "groups" || e.button !== 0 || !e.target.closest) return;
-        var tile = e.target.closest("#kui-deck .tile");
+        var tile = e.target.closest("#kui-deck .mtile");
         if (!tile || e.target.closest(".tpop")) return;
         drag = { el: tile, key: tile.getAttribute("data-name"), x0: e.clientX, y0: e.clientY, started: false, pointer: e.pointerId };
     }
@@ -420,7 +420,7 @@ window.KobraDeck = function (self, h) {
         var order = [], cur = null;
         Array.prototype.forEach.call(document.getElementById("kui-deck").children, function (n) {
             if (n.classList.contains("lbl3")) { cur = { id: n.getAttribute("data-group"), items: [] }; order.push(cur); }
-            else if (n.classList.contains("tile") && cur) cur.items.push(n.getAttribute("data-name"));
+            else if (n.classList.contains("mtile") && cur) cur.items.push(n.getAttribute("data-name"));
         });
         var tile = self.tileModel(d.key, "");
         editSave(function (dk) {
@@ -432,7 +432,7 @@ window.KobraDeck = function (self, h) {
         }, d.toNew ? "Made a new group with " + tile.label : "Moved " + tile.label);
         // saving re-renders the tiles; settle the new node from where the pointer left it, with a slight overshoot
         if (from && !reduced()) setTimeout(function () {
-            var el = document.querySelector('#kui-deck .tile[data-name="' + d.key + '"]');
+            var el = document.querySelector('#kui-deck .mtile[data-name="' + d.key + '"]');
             if (el && el.animate) el.animate([{ transform: from }, { transform: "scale(.99)", offset: .75 }, { transform: "none" }], { duration: 160, easing: EASE_OUT });
         }, 0);
     }
@@ -624,7 +624,7 @@ window.KobraDeck = function (self, h) {
     var ringAt = null;
     function placeRing(animate) {
         var ring = document.querySelector("#kui .selring"), card = ring && ring.parentNode;
-        var tile = self.selMacro() && document.querySelector('#kui-deck .tile[data-name="' + self.selMacro() + '"]');
+        var tile = self.selMacro() && document.querySelector('#kui-deck .mtile[data-name="' + self.selMacro() + '"]');
         if (!ring) return;
         if (!tile || !tile.offsetParent) { ring.style.opacity = "0"; ringAt = null; return; }
         var c = card.getBoundingClientRect(), r = tile.getBoundingClientRect();
@@ -652,7 +652,7 @@ window.KobraDeck = function (self, h) {
     function stagger() {
         if (staggered || self.route() !== "macros" || !self.deckLoaded()) return;
         staggered = true;
-        Array.prototype.forEach.call(document.querySelectorAll("#kui-deck .tile:not(.is-hidden), #kui-deck .lbl3"), function (el, i) {
+        Array.prototype.forEach.call(document.querySelectorAll("#kui-deck .mtile:not(.is-hidden), #kui-deck .lbl3"), function (el, i) {
             if (reduced()) el.animate && el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 80, fill: "backwards" });
             else el.animate && el.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 220, delay: Math.min(i * 15, 80), easing: EASE_OUT, fill: "backwards" });
         });

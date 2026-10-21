@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><title>cam diag</title>
+<pre id="out">running</pre>
+<script>
+// Diagnostic only: tries the webcam stream with fetch and with an <img>, reports what happened after 8 s.
+var log = [], t0 = performance.now(), url = "http://octoprint-kobra:8080/?action=stream&_d=" + Date.now();
+function L(s) { log.push(Math.round(performance.now() - t0) + "ms " + s); document.getElementById("out").textContent = log.join("\n"); document.title = log.join(" | "); }
+L("ua " + navigator.userAgent);
+var bytes = 0;
+fetch(url, { cache: "no-store" }).then(function (r) {
+  L("fetch status " + r.status + " type " + r.type + " ct " + r.headers.get("content-type"));
+  var rd = r.body.getReader();
+  (function pump() { rd.read().then(function (x) { if (x.done) { L("fetch done"); return; } bytes += x.value.length; if (bytes > 200000) { L("fetch got " + bytes + " bytes"); rd.cancel(); return; } pump(); }).catch(function (e) { L("read err " + e); }); })();
+}).catch(function (e) { L("fetch err " + e.name + ": " + e.message); });
+var img = new Image(); img.onload = function () { L("img load " + img.naturalWidth + "x" + img.naturalHeight); }; img.onerror = function () { L("img error"); };
+img.src = "http://octoprint-kobra:8080/?action=stream&_i=" + Date.now();
+var ticks = 0, iv = setInterval(function () { L("t" + (++ticks) + " fetch bytes " + bytes); if (ticks >= 5) clearInterval(iv); }, 1000);
+</script>

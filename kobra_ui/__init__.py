@@ -392,6 +392,27 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
         except (ValueError, TypeError) as exc:
             return flask.make_response(flask.jsonify({"error": str(exc)}), 400)
 
+    @octoprint.plugin.BlueprintPlugin.route("/diag", methods=["POST"])
+    def diag_post(self):
+        """Browser-side diagnostics (webcam states, magnifier timing) appended to diag.log for troubleshooting."""
+        if not Permissions.CONTROL.can():
+            flask.abort(403)
+        events = (flask.request.get_json(silent=True) or {}).get("events") or []
+        path = os.path.join(self.get_plugin_data_folder(), "diag.log")
+        lines = []
+        for ev in events[:200]:
+            lines.append(json.dumps(ev, default=str)[:2000])
+        try:
+            old = []
+            if os.path.exists(path):
+                with open(path) as f:
+                    old = f.read().splitlines()[-1800:]
+            with open(path, "w") as f:
+                f.write("\n".join(old + lines) + "\n")
+        except OSError:
+            pass
+        return flask.jsonify({"ok": True})
+
     @octoprint.plugin.BlueprintPlugin.route("/config/outline", methods=["GET"])
     def config_outline(self):
         files = {}
@@ -577,7 +598,7 @@ def _history(name):
 
 
 __plugin_name__ = "Kobra UI"
-__plugin_version__ = "2.7.9"
+__plugin_version__ = "2.8.1"
 __plugin_description__ = "Full-screen console for the Kobra 2 Neo on OctoPrint + Klipper"
 __plugin_pythoncompat__ = ">=3.9,<4"
 __plugin_implementation__ = KobraUiPlugin()

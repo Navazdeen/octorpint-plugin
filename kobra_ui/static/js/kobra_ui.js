@@ -445,7 +445,19 @@ $(function () {
             barW = el.children.length ? el.children[0].getBoundingClientRect().width : 0;
         }
         function kick() { if (!trackFrame) { lastTs = 0; trackFrame = requestAnimationFrame(magnify); } }
+        var mag = null, magLT = [];
+        if (window.PerformanceObserver) try { new PerformanceObserver(function (l) { if (mag) l.getEntries().forEach(function (e) { magLT.push(Math.round(e.duration)); }); }).observe({ entryTypes: ["longtask"] }); } catch (e) { /* not supported */ }
         function magnify(ts) {
+            var t0 = performance.now();
+            try { magnifyFrame(ts); } finally {
+                if (mag && trackHover) {
+                    var ex = performance.now() - t0; mag.n++; mag.ex += ex; mag.exMax = Math.max(mag.exMax, ex);
+                    if (mag.last) { var gap = ts - mag.last; mag.gap += gap; mag.gapMax = Math.max(mag.gapMax, gap); if (gap > 34) mag.slow++; }
+                    mag.last = ts;
+                }
+            }
+        }
+        function magnifyFrame(ts) {
             trackFrame = null;
             var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
             if (!el || !el.children.length) { amp = 0; return; }
@@ -496,7 +508,8 @@ $(function () {
         $(window).on("resize", function () { trackRect = null; barLefts = null; });
         document.addEventListener("scroll", function () { trackRect = null; }, true);
         self.trackMove = function (d, e) {
-            if (!trackHover) { trackHover = true; trackRect = null; }
+            if (!trackHover) { trackHover = true; trackRect = null; mag = { n: 0, ex: 0, exMax: 0, gap: 0, gapMax: 0, slow: 0, last: 0, t: performance.now(), moves: 0 }; magLT = []; }
+            if (mag) mag.moves++;
             ampT = 1;
             trackX = (e.originalEvent || e).clientX;
             kick();
@@ -506,6 +519,12 @@ $(function () {
         // hit test can land on the neighbour at a boundary)
         self.trackClick = function (layer) { self.pauseAtLayerClick(trackHover && lastHot >= 0 ? lastHot + 1 : layer); };
         self.trackLeave = function () {
+            if (mag && mag.n > 5) {
+                var bars = document.getElementById("kui-layers");
+                self.diag("mag", { frames: mag.n, moves: mag.moves, ms: Math.round(performance.now() - mag.t), execAvg: +(mag.ex / mag.n).toFixed(2), execMax: +mag.exMax.toFixed(1),
+                                   gapAvg: +(mag.gap / Math.max(1, mag.n - 1)).toFixed(1), gapMax: Math.round(mag.gapMax), slowFrames: mag.slow, longTasks: magLT.slice(0, 10), bars: bars ? bars.children.length : 0 });
+            }
+            mag = null;
             trackHover = false; ampT = 0;
             var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
             if (tip) tip.classList.remove("show");
@@ -1509,6 +1528,20 @@ $(function () {
             return out.length && rows.some(function (r) { return r.c; }) ? out : [{ t: "No differences.", c: "gap" }];
         }
 
+        /* ====================== diagnostics ========================== */
+        // small event log sent to the plugin (diag.log) so problems seen only in one browser can be traced
+        var diagQueue = [], diagT0 = Date.now();
+        self.diag = function (kind, data) {
+            diagQueue.push($.extend({ t: new Date().toISOString().slice(11, 23), ms: Date.now() - diagT0, kind: kind }, data || {}));
+            if (diagQueue.length > 300) diagQueue.splice(0, diagQueue.length - 300);
+        };
+        setInterval(function () {
+            if (!diagQueue.length || !self.loginState || !self.loginState.isUser || !self.loginState.isUser()) return;
+            var batch = diagQueue.splice(0, diagQueue.length);
+            OctoPrint.postJson("plugin/" + PLUGIN + "/diag", { events: batch }).fail(function () { diagQueue = batch.concat(diagQueue).slice(-300); });
+        }, 3000);
+        self.diag("page", { ua: navigator.userAgent, href: location.href, w: innerWidth, h: innerHeight, dpr: devicePixelRatio });
+
         /* ====================== live view ========================== */
         self.has3d = ko.observable(false);
         self.has2d = ko.observable(false);
@@ -1536,6 +1569,7 @@ $(function () {
                 el.src = u;
             }
             function retry(why) {
+                self.diag("cam", { ev: "retry", why: why, fails: fails + 1, frames: frames });
                 clear();
                 if (!url || document.hidden) { self.camState("off"); return; }
                 fails++;
@@ -1554,6 +1588,7 @@ $(function () {
                 clear();
                 if (!url || document.hidden) { self.camState("off"); return; }
                 var my = ++gen;
+                self.diag("cam", { ev: "connect", url: url, hidden: document.hidden, gen: my });
                 if (!window.fetch || !window.ReadableStream || !window.AbortController) {   // very old browser: plain img, retried on error
                     var el = img(); self.camState("live");
                     el.onerror = function () { if (my === gen) retry("error"); };
@@ -1570,6 +1605,7 @@ $(function () {
                     if (now - fpsAt >= 2000) { self.camFps(Math.round(frames * 1000 / (now - fpsAt))); frames = 0; fpsAt = now; }
                 }, 500);
                 fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "_kui=" + Date.now(), { signal: ctrl.signal, cache: "no-store" }).then(function (res) {
+                    self.diag("cam", { ev: "response", status: res.status, type: res.type, ct: res.headers.get("content-type"), body: !!res.body });
                     if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
                     var reader = res.body.getReader(), buf = new Uint8Array(1 << 18), len = 0;
                     function pump() {
@@ -1587,21 +1623,24 @@ $(function () {
                                 var b = indexOf(buf, len, EOI, a + 2); if (b < 0) { if (a > 0) { buf.copyWithin(0, a, len); len -= a; } break; }
                                 show(new Blob([buf.slice(a, b + 2)], { type: "image/jpeg" }));
                                 lastFrame = Date.now(); frames++; fails = 0;
-                                if (self.camState() !== "live") self.camState("live");
+                                if (self.camState() !== "live") { self.camState("live"); self.diag("cam", { ev: "live", bytes: b + 2 }); }
                                 buf.copyWithin(0, b + 2, len); len -= b + 2;
                             }
                             return pump();
                         });
                     }
                     return pump();
-                }).catch(function () { if (my === gen && ctrl && !ctrl.signal.aborted) retry("error"); });
+                }).catch(function (err) {
+                    self.diag("cam", { ev: "error", err: String(err && (err.name + ": " + err.message) || err), aborted: !!(ctrl && ctrl.signal.aborted), current: my === gen });
+                    if (my === gen && ctrl && !ctrl.signal.aborted) retry("error");
+                });
             }
             document.addEventListener("visibilitychange", function () {
                 if (!url) return;
                 if (document.hidden) { clear(); gen++; self.camState("off"); } else { fails = 0; connect(); }
             });
             return {
-                want: function (u) { if (u === url) { if (u && self.camState() === "off") connect(); return; } url = u; fails = 0; if (u) connect(); else stop(); },
+                want: function (u) { if (u !== url) self.diag("cam", { ev: "want", url: u, was: url, state: self.camState() }); if (u === url) { if (u && self.camState() === "off") connect(); return; } url = u; fails = 0; if (u) connect(); else stop(); },
                 now: function () { fails = 0; connect(); }
             };
         })();

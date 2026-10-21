@@ -291,7 +291,7 @@
                 <div class="lbl3" data-bind="attr: { 'data-group': id, 'data-flip': key }"><span data-bind="text: name, click: $root.renameGroup, css: { renamable: $root.deckEdit() && id !== 'all' }"></span><span class="line"></span></div>
                 <!-- /ko -->
                 <!-- ko ifnot: $data.isLabel -->
-                <div tabindex="0" role="button" data-bind="attr: { class: $root.tileClass($data), 'data-name': key, 'data-flip': key, 'aria-pressed': $root.selMacro() === key ? 'true' : 'false', 'aria-label': label }, click: $root.tileClick, event: { dblclick: $root.tileDblClick, keydown: $root.tileKey }">
+                <div tabindex="0" role="button" data-bind="attr: { class: $root.tileClass($data), 'data-name': key, 'data-flip': key, 'aria-pressed': $root.selMacro() === key ? 'true' : 'false', 'aria-label': label }, click: $root.deckTileClick, event: { dblclick: $root.deckTileDblClick, keydown: $root.deckTileKey }">
                   <span class="grip" aria-hidden="true"><i class="fa-solid fa-grip-vertical"></i></span>
                   <span class="ic" aria-hidden="true"><i class="fa-solid" data-bind="css: icon"></i></span>
                   <span class="n" data-bind="text: label, css: { num: !preset }"></span>
@@ -489,7 +489,7 @@
                 <button data-bind="attr: { 'aria-pressed': meshMode() === 'map' ? 'true' : 'false' }, click: function() { setMeshMode('map') }"><i class="fa-solid fa-table-cells"></i>Map</button>
                 <button data-bind="attr: { 'aria-pressed': meshMode() === '3d' ? 'true' : 'false' }, click: function() { setMeshMode('3d') }"><i class="fa-solid fa-cube"></i>3D surface</button></span></h2>
               <!-- ko if: meshRows().length -->
-              <div data-bind="visible: meshMode() === 'map'" style="display:flex;justify-content:center;gap:8px;align-items:center">
+              <div class="mapwrap" data-bind="visible: meshMode() === 'map'">
                 <div style="writing-mode:vertical-rl;transform:rotate(180deg);color:var(--muted);font-size:12px;text-align:center;flex:none">Back → Y</div>
                 <div class="heat" data-bind="style: { gridTemplateColumns: 'repeat(' + meshCols() + ', 1fr)', gridTemplateRows: 'repeat(' + meshRows().length + ', 1fr)', '--ar': meshAspect() }, foreach: meshCells"><div data-bind="text: $data.t, style: { background: $data.bg, color: $data.ink }, attr: { title: $data.title }"></div></div>
               </div>
