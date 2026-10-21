@@ -16,6 +16,7 @@ import time
 
 import flask
 import octoprint.plugin
+import tornado.web
 from octoprint.access.permissions import Permissions
 
 from . import macros as kmacros
@@ -171,6 +172,60 @@ class _Reader:
             self.buf += chunk
         raw, self.buf = self.buf.split(b"\x03", 1)
         return json.loads(raw)
+
+
+class _StreamProxy(tornado.web.RequestHandler):
+    """Relays the camera's MJPEG stream; the camera connection closes as soon as the viewer goes away."""
+
+    def initialize(self, access_validation=None, source=None, logger=None):
+        self._access = access_validation
+        self._source = source
+        self._logger = logger
+        self._upstream = None
+
+    def on_connection_close(self):
+        if self._upstream is not None:
+            self._upstream.close()
+
+    async def get(self):
+        from urllib.parse import urlsplit
+        from tornado.iostream import StreamClosedError
+        from tornado.tcpclient import TCPClient
+
+        if self._access is not None:
+            self._access(self.request)
+        url = urlsplit(self._source())
+        target = (url.path or "/") + ("?" + url.query if url.query else "")
+        try:
+            self._upstream = await TCPClient().connect(url.hostname, url.port or 80, timeout=5)
+            await self._upstream.write(("GET %s HTTP/1.0\r\nHost: %s\r\n\r\n" % (target, url.netloc)).encode("latin-1"))
+            head = (await self._upstream.read_until(b"\r\n\r\n", max_bytes=16384)).decode("latin-1")
+        except Exception as exc:
+            if self._upstream is not None:
+                self._upstream.close()
+            self.set_status(502)
+            self.finish("The camera stream at %s isn't answering (%s)." % (url.geturl(), exc))
+            return
+        status = head.split("\r\n", 1)[0]
+        if " 200 " not in status + " ":
+            self._upstream.close()
+            self.set_status(502)
+            self.finish("The camera answered: %s" % status)
+            return
+        for line in head.split("\r\n")[1:]:
+            if line.lower().startswith("content-type:"):
+                self.set_header("Content-Type", line.split(":", 1)[1].strip())
+        self.set_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.set_header("Pragma", "no-cache")
+        try:
+            while True:
+                chunk = await self._upstream.read_bytes(65536, partial=True)
+                self.write(chunk)
+                await self.flush()
+        except StreamClosedError:
+            pass  # viewer left (on_connection_close closed the camera side) or the camera stopped
+        finally:
+            self._upstream.close()
 
 
 class KobraUiPlugin(octoprint.plugin.StartupPlugin,
@@ -500,6 +555,34 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
         return flask.jsonify(_LAYER_CACHE[key])
 
     # --- ui -----------------------------------------------------------------
+    # --- webcam proxy ------------------------------------------------------------
+    def http_routes(self, server_routes, *args, **kwargs):
+        """/plugin/kobra_ui/stream: the MJPEG stream served from OctoPrint's own address.
+
+        Browsers then read the camera same-origin: no cross-origin request to another port, no separate
+        connection pool for :8080, and it also works through the Tailscale https name."""
+        from octoprint.server import app
+        from octoprint.server.util.flask import permission_validator
+        from octoprint.server.util.tornado import access_validation_factory
+        return [(r"/stream", _StreamProxy, {
+            "access_validation": access_validation_factory(app, permission_validator, Permissions.WEBCAM),
+            "source": self._stream_source,
+            "logger": self._logger,
+        })]
+
+    def _stream_source(self):
+        """The configured stream URL, pointed at 127.0.0.1 when the camera runs on this machine."""
+        from urllib.parse import urlsplit, urlunsplit
+        from octoprint.settings import settings
+        url = settings().get(["plugins", "classicwebcam", "stream"]) or "http://127.0.0.1:8080/?action=stream"
+        parts = urlsplit(url)
+        local = {"localhost", "127.0.0.1", socket.gethostname().lower()}
+        host = (parts.hostname or "").lower()
+        if not parts.scheme or host in local or host.split(".")[0] in local:
+            netloc = "127.0.0.1" + (":%d" % parts.port if parts.port else "")
+            url = urlunsplit(("http", netloc, parts.path or "/", parts.query, ""))
+        return url
+
     def is_template_autoescaped(self):
         return True
 
@@ -598,11 +681,12 @@ def _history(name):
 
 
 __plugin_name__ = "Kobra UI"
-__plugin_version__ = "2.8.1"
+__plugin_version__ = "2.8.4"
 __plugin_description__ = "Full-screen console for the Kobra 2 Neo on OctoPrint + Klipper"
 __plugin_pythoncompat__ = ">=3.9,<4"
 __plugin_implementation__ = KobraUiPlugin()
 __plugin_hooks__ = {
     "octoprint.comm.protocol.gcode.sent": __plugin_implementation__.on_gcode_sent,
     "octoprint.comm.protocol.gcode.received": __plugin_implementation__.on_gcode_received,
+    "octoprint.server.http.routes": __plugin_implementation__.http_routes,
 }

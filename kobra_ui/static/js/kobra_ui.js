@@ -1648,7 +1648,8 @@ $(function () {
         self.setViewMode = function (m) { self.viewMode(m); store("viewMode", m); self.syncViewer(); };
         self.syncViewer = function () {
             var live = $("html").hasClass("kui-on") && self.route() === "printer", mode = self.viewMode();
-            cam.want(live && mode === "webcam" ? self.webcamUrl() : "");
+            // read the camera through OctoPrint's own address (/plugin/kobra_ui/stream): same origin as this page
+            cam.want(live && mode === "webcam" && self.webcamUrl() ? BASEURL + "plugin/" + PLUGIN + "/stream" : "");
             try {
                 if (self.prettyVM && self.prettyVM.onTabChange) self.prettyVM.onTabChange(live && mode === "3d" ? "#tab_plugin_prettygcode" : "#kui", live && mode === "3d" ? "#kui" : "#tab_plugin_prettygcode");
                 if (self.gcodeVM && self.gcodeVM.onTabChange) self.gcodeVM.onTabChange(live && mode === "2d" ? "#gcode" : "#kui", "#kui");
