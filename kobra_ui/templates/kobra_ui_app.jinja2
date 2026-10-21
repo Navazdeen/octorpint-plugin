@@ -47,7 +47,7 @@
         </header>
 
         <div class="canvas" id="kui-canvas">
-          <section class="card wide" aria-labelledby="kui-h-view">
+          <section class="card wide" id="kui-live" aria-labelledby="kui-h-view">
             <h2 id="kui-h-view">Live view
               <span class="seg" style="margin-left:auto" role="group" aria-label="View">
                 <button data-bind="attr: { 'aria-pressed': viewMode() === 'webcam' ? 'true' : 'false' }, click: function() { setViewMode('webcam') }"><i class="fa-solid fa-video"></i>Webcam</button>
@@ -386,9 +386,9 @@
                 <button data-bind="attr: { 'aria-pressed': meshMode() === 'map' ? 'true' : 'false' }, click: function() { setMeshMode('map') }"><i class="fa-solid fa-table-cells"></i>Map</button>
                 <button data-bind="attr: { 'aria-pressed': meshMode() === '3d' ? 'true' : 'false' }, click: function() { setMeshMode('3d') }"><i class="fa-solid fa-cube"></i>3D surface</button></span></h2>
               <!-- ko if: meshRows().length -->
-              <div data-bind="visible: meshMode() === 'map'" style="display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:center">
-                <div style="writing-mode:vertical-rl;transform:rotate(180deg);color:var(--muted);font-size:12px;text-align:center">Back → Y</div>
-                <div class="heat" data-bind="style: { gridTemplateColumns: 'repeat(' + meshCols() + ', 1fr)' }, foreach: meshCells"><div data-bind="text: $data.t, style: { background: $data.bg, color: $data.ink }, attr: { title: $data.title }"></div></div>
+              <div data-bind="visible: meshMode() === 'map'" style="display:flex;justify-content:center;gap:8px;align-items:center">
+                <div style="writing-mode:vertical-rl;transform:rotate(180deg);color:var(--muted);font-size:12px;text-align:center;flex:none">Back → Y</div>
+                <div class="heat" data-bind="style: { gridTemplateColumns: 'repeat(' + meshCols() + ', 1fr)', gridTemplateRows: 'repeat(' + meshRows().length + ', 1fr)', '--ar': meshAspect() }, foreach: meshCells"><div data-bind="text: $data.t, style: { background: $data.bg, color: $data.ink }, attr: { title: $data.title }"></div></div>
               </div>
               <div id="kui-mesh3d" data-bind="visible: meshMode() === '3d'"></div>
               <div class="heat-scale"><span class="num" data-bind="text: fmtSigned(meshMin(), 2)"></span><span class="ramp"></span><span class="num" data-bind="text: fmtSigned(meshMax(), 2) + ' mm'"></span></div>
@@ -626,5 +626,11 @@
 
   <button class="totop" type="button" data-bind="visible: showTop(), click: scrollTop"><i class="fa-solid fa-arrow-up"></i>Back to top</button>
   <div class="dropzone" data-bind="visible: dropping()"><span><i class="fa-solid fa-upload"></i> Drop .gcode files to upload</span></div>
-  <div class="toast" role="status" aria-live="polite" data-bind="visible: toastText(), css: toastKind()"><i class="fa-solid" data-bind="css: toastKind() === 'bad' ? 'fa-circle-exclamation' : (toastKind() === 'good' ? 'fa-circle-check' : 'fa-circle-info')"></i><span data-bind="text: toastText()"></span></div>
+  <div class="toasts" role="status" aria-live="polite" data-bind="foreach: toasts">
+    <div class="toast" data-bind="css: kind() + (leaving() ? ' leaving' : ''), event: { mouseenter: $root.toastHold, mouseleave: $root.toastRelease }">
+      <span class="ti" aria-hidden="true"><!-- ko if: kind() === 'busy' --><span class="spin"></span><!-- /ko --><!-- ko ifnot: kind() === 'busy' --><i class="fa-solid" data-bind="css: $root.toastIcon($data)"></i><!-- /ko --></span>
+      <div class="tx"><div data-bind="text: text"></div><div class="dt" data-bind="visible: detail(), text: detail()"></div></div>
+      <button class="tclose" aria-label="Dismiss" data-bind="click: $root.toastClose"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+  </div>
 </div>

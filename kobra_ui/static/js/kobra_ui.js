@@ -83,8 +83,19 @@ $(function () {
         function k(obj, key, dflt) { var o = self.kstat()[obj]; return o && o[key] !== undefined && o[key] !== null ? o[key] : dflt; }
         self.klipperState = ko.pureComputed(function () { return self.kconnected() ? k("webhooks", "state", "startup") : "offline"; });
         self.klipperReady = ko.pureComputed(function () { return self.klipperState() === "ready"; });
+        var restartToast = null, prevKState = null, pageStart = Date.now();   // no "ready" toast for the first load
         self.klipperState.subscribe(function (st) {
-            if (st === "shutdown" || st === "error") self.notify("Klipper " + st, k("webhooks", "state_message", "The printer stopped."), "kui-klipper");
+            var msg = k("webhooks", "state_message", "The printer stopped.");
+            if (st === "shutdown" || st === "error") {
+                self.notify("Klipper " + st, msg, "kui-klipper");
+                var title = st === "shutdown" ? "Klipper shut down" : "Klipper reported an error";
+                if (restartToast && !restartToast.leaving()) self.toastSet(restartToast, title, "bad", cleanError(msg)); else self.toast(title, "bad", cleanError(msg));
+                restartToast = null;
+            } else if (st === "ready" && prevKState && prevKState !== "ready" && (restartToast || Date.now() - pageStart > 8000)) {
+                if (restartToast && !restartToast.leaving()) self.toastSet(restartToast, "Klipper is ready", "good"); else self.toast("Klipper is ready", "good");
+                restartToast = null;
+            }
+            prevKState = st;
         });
         self.isOperational = ko.pureComputed(function () { return self.isConnected() && self.klipperReady(); });
         self.kLayerCurrent = ko.pureComputed(function () { return (k("print_stats", "info", {}) || {}).current_layer || 0; });
@@ -187,27 +198,93 @@ $(function () {
         });
 
         /* ====================== commands ============================ */
-        self.gcode = function (cmd) { OctoPrint.control.sendGcode(cmd); };
-        self.pausePrint = function () { OctoPrint.job.pause(); };
+        // Buttons run their G-code through Klipper's API socket (plugin "run" command): the answer comes back
+        // when the command has finished, with Klipper's error text if it failed. Long ones show a busy toast that
+        // turns into done/failed; quick ones only speak up when something went wrong.
+        var FEEDBACK = [
+            [/^G28\b/, "Homing…", "Homed", "Homing failed"],
+            [/^LOAD_FILAMENT\b/, "Loading filament…", "Filament loaded", "Loading failed"],
+            [/^UNLOAD_FILAMENT\b/, "Unloading filament…", "Filament unloaded", "Unloading failed"],
+            [/^PURGE_FILAMENT\b/, "Purging…", "Purge done", "Purge failed"],
+            [/^CLEAN_NOZZLE\b/, "Cleaning the nozzle…", "Nozzle cleaned", "Nozzle cleaning failed"],
+            [/^PARK\b/, "Parking the head…", "Head parked", "Parking failed"],
+            [/^MESH_CALIBRATE\b/, "Probing a new bed mesh…", "Bed mesh saved", "Mesh probing failed"],
+            [/^M600\b/, "Moving to the filament change spot…", "Ready for the filament change", "Filament change failed"],
+            [/^RESUME\b/, "Resuming…", "Resumed", "Resume failed"],
+            [/^_EXTRUDE LENGTH=-/, "Retracting…", "Retracted", "Retract failed"],
+            [/^_EXTRUDE\b/, "Extruding…", "Extruded", "Extrude failed"],
+            [/^PREHEAT\b.*MATERIAL=(\w+)/, null, "Heating for $1", null],
+            [/^COOLDOWN\b/, null, "Heaters off", null],
+            [/^M84\b/, null, "Motors off", null],
+            [/^DRY_FILAMENT\b/, null, "Drying started: bed at 60 °C for 3 h", null],
+            [/^BED_MESH_PROFILE LOAD/, null, "Saved mesh loaded", null]
+        ];
+        var runs = {}, runSeq = 0;
+        function feedbackFor(cmd) {
+            var up = cmd.trim().toUpperCase();
+            for (var i = 0; i < FEEDBACK.length; i++) {
+                var m = FEEDBACK[i][0].exec(up);
+                if (m) return { busy: FEEDBACK[i][1], done: FEEDBACK[i][2] && FEEDBACK[i][2].replace("$1", m[1] || ""), fail: FEEDBACK[i][3] };
+            }
+            return {};
+        }
+        function setBusy(btn, on) { if (!btn) return; btn.classList.toggle("is-busy", on); if (on) btn.setAttribute("aria-busy", "true"); else btn.removeAttribute("aria-busy"); }
+        function cleanError(e) { return String(e || "Klipper didn't say why.").split("\n")[0].replace(/^!!\s*/, "").slice(0, 200); }
+        self.gcode = function (cmd) {
+            var fb = feedbackFor(cmd), id = "r" + (++runSeq) + "-" + Date.now().toString(36);
+            var btn = document.activeElement && document.activeElement.closest ? document.activeElement.closest("#kui button") : null;
+            var run = runs[id] = { cmd: cmd, fb: fb, btn: btn, toast: fb.busy ? self.toast(fb.busy, "busy") : null };
+            setBusy(btn, true);
+            OctoPrint.simpleApiCommand(PLUGIN, "run", { script: cmd, id: id }).fail(function () {
+                // no socket path (Klipper's API socket missing): send through OctoPrint, without a completion signal
+                delete runs[id]; setBusy(btn, false);
+                OctoPrint.control.sendGcode(cmd);
+                if (run.toast) self.toastSet(run.toast, "Sent " + cmd.split(/\s/)[0], "info", "Watch the console for the result.");
+            });
+        };
+        function finishRun(r) {
+            var run = runs[r.id]; if (!run) return;
+            delete runs[r.id]; setBusy(run.btn, false);
+            var live = run.toast && !run.toast.leaving();
+            if (r.ok) {
+                if (run.fb.done) { if (live) self.toastSet(run.toast, run.fb.done, "good"); else if (!run.toast) self.toast(run.fb.done, "good"); }
+                else if (live) self.toastClose(run.toast);
+            } else {
+                var title = run.fb.fail || (run.cmd.split(/\s/)[0] + " failed");
+                if (live) self.toastSet(run.toast, title, "bad", cleanError(r.error)); else self.toast(title, "bad", cleanError(r.error));
+            }
+        }
+        // OctoPrint's job commands: busy until OctoPrint reports the matching event
+        var jobToast = null;
+        function jobBusy(text) { if (jobToast && !jobToast.leaving()) self.toastSet(jobToast, text, "busy"); else jobToast = self.toast(text, "busy"); }
+        function jobDone(text, kind, detail) {
+            if (jobToast && !jobToast.leaving()) self.toastSet(jobToast, text, kind, detail); else self.toast(text, kind, detail);
+            jobToast = null;
+        }
+        function jobFail(x) { jobDone("OctoPrint refused", "bad", (x && x.responseJSON && x.responseJSON.error) || (x && x.statusText) || ""); }
+        self.pausePrint = function () { jobBusy("Pausing at the end of the current move…"); OctoPrint.job.pause().fail(jobFail); };
         self.resumePrint = function () {
-            if (self.flags().paused) OctoPrint.job.resume(); else self.gcode("RESUME");
+            if (self.flags().paused) { jobBusy("Resuming…"); OctoPrint.job.resume().fail(jobFail); } else self.gcode("RESUME");
             self.popupDismissed(true);
         };
         self.cancelPrint = function () {
-            self.confirm("Cancel the print?", "The print stops, the heaters turn off and the head moves away. This can't be undone.", "Cancel print", true, function () { OctoPrint.job.cancel(); });
+            self.confirm("Cancel the print?", "The print stops, the heaters turn off and the head moves away. This can't be undone.", "Cancel print", true, function () { jobBusy("Cancelling the print…"); OctoPrint.job.cancel().fail(jobFail); });
         };
-        self.startPrint = function () { if (self.filePath()) OctoPrint.job.start(); };
+        self.startPrint = function () { if (self.filePath()) { jobBusy("Starting the print…"); OctoPrint.job.start().fail(jobFail); } };
+        self.onEventPrintStarted = function (p) { jobDone("Print started", "good", shortName(p && (p.name || p.path))); };
+        self.onEventPrintPaused = function () { jobDone("Print paused", "info", "Resume when you're ready."); };
+        self.onEventPrintResumed = function () { jobDone("Print resumed", "good"); };
         self.emergencyStop = function () {
             // straight to Klipper over its socket, and M112 over serial as a fallback
             OctoPrint.simpleApiCommand(PLUGIN, "estop", {}).fail(function () { self.gcode("M112"); });
-            self.gcode("M112");
-            self.toast("Emergency stop sent. Use Firmware restart to recover.", "bad");
+            OctoPrint.control.sendGcode("M112");
+            self.toast("Emergency stop sent", "bad", "Use Firmware restart to recover.");
         };
         self.firmwareRestart = function () {
-            self.confirm("Firmware restart?", "Restarts Klipper and the printer board. A running print is lost.", "Restart", true, function () { self.gcode("FIRMWARE_RESTART"); });
+            self.confirm("Firmware restart?", "Restarts Klipper and the printer board. A running print is lost.", "Restart", true, function () { restartToast = self.toast("Restarting the firmware…", "busy"); OctoPrint.control.sendGcode("FIRMWARE_RESTART"); });
         };
         self.hostRestart = function () {
-            self.confirm("Restart Klipper?", "Reloads printer.cfg and macros.cfg. A running print is lost.", "Restart", true, function () { self.gcode("RESTART"); });
+            self.confirm("Restart Klipper?", "Reloads printer.cfg and macros.cfg. A running print is lost.", "Restart", true, function () { restartToast = self.toast("Restarting Klipper…", "busy"); OctoPrint.control.sendGcode("RESTART"); });
         };
         self.confirmGcode = function (title, text, button, cmd) { self.confirm(title, text, button, false, function () { self.gcode(cmd); }); };
         self.meshCalibrate = function () {
@@ -234,7 +311,7 @@ $(function () {
         };
         self.pauseLayerKey = function (d, e) { if (e.key === "Enter") { self.setPauseAtLayer(); return false; } return true; };
         self.setPauseNextLayer = function () { self.gcode("SET_PAUSE_NEXT_LAYER MACRO=" + self.pauseMacro()); };
-        self.clearPauseLayer = function () { self.gcode("SET_PAUSE_AT_LAYER ENABLE=0"); self.gcode("SET_PAUSE_NEXT_LAYER ENABLE=0"); };
+        self.clearPauseLayer = function () { self.gcode("SET_PAUSE_AT_LAYER ENABLE=0\nSET_PAUSE_NEXT_LAYER ENABLE=0"); };
         self.pauseAtLayerClick = function (layer) {
             if (!self.layerTracking()) { self.toast("This file was sliced without layer tracking. Re-slice it in Orca to pause at a layer.", "bad"); return; }
             if (!self.isOperational() || layer <= self.layerCurrent()) return;
@@ -294,71 +371,84 @@ $(function () {
         });
         // Dock-style magnifier on the real bars, transforms only (no layout work per frame):
         // every bar's scale follows a Gaussian of its distance to the exact pointer position, and the bars are laid
-        // out analytically so the bar under the pointer stays under it (left side spreads left, right side right)
-        var trackFrame = null, trackX = 0, trackHover = false, trackRect = null, barLefts = null, barW = 0, lastHot = -1, settleTimer = null;
+        // out analytically so the bar under the pointer stays under it (left side spreads left, right side right).
+        // The focus is the pointer itself (never smoothed: no lag); only the strength eases, in on enter and out on
+        // leave, in one rAF loop, so re-entering mid-way continues from where the bars are instead of snapping.
+        var trackFrame = null, trackX = 0, trackHover = false, trackRect = null, barLefts = null, barW = 0, lastHot = -1;
+        var amp = 0, ampT = 0, lastTs = 0, reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         function measureTrack(el) {
             trackRect = el.getBoundingClientRect();
             barLefts = Array.prototype.map.call(el.children, function (b) { return b.getBoundingClientRect().left - trackRect.left; });
             barW = el.children.length ? el.children[0].getBoundingClientRect().width : 0;
         }
-        function magnify() {
+        function kick() { if (!trackFrame) { lastTs = 0; trackFrame = requestAnimationFrame(magnify); } }
+        function magnify(ts) {
             trackFrame = null;
             var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
-            if (!el || !el.children.length) return;
+            if (!el || !el.children.length) { amp = 0; return; }
             var bars = el.children, n = bars.length;
             if (!trackRect || !barLefts || barLefts.length !== n) measureTrack(el);
-            el.classList.remove("settling");
+            // ease the strength toward its target (time based, so it feels the same at 40 or 144 fps)
+            var dt = lastTs ? Math.min(64, ts - lastTs) : 16; lastTs = ts;
+            var tau = ampT > amp ? 45 : 70;
+            amp = reduceMotion ? ampT : amp + (ampT - amp) * (1 - Math.exp(-dt / tau));
+            if (Math.abs(ampT - amp) < 0.004) amp = ampT;
+            if (amp === 0) {                                          // fully settled: hand the bars back to CSS
+                Array.prototype.forEach.call(bars, function (b) { b.style.transform = ""; });
+                return;
+            }
             var x = Math.max(0, Math.min(trackRect.width - 0.01, trackX - trackRect.left));
             var lo = 0, hi = n - 1;                                   // bar under the pointer (unmagnified layout)
             while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (barLefts[mid] <= x) lo = mid; else hi = mid - 1; }
             var hot = lo, pitch = n > 1 ? barLefts[1] - barLefts[0] : trackRect.width;
-            var sigma = Math.max(2.2, Math.min(6, n / 34)) * pitch, AMP = Math.min(5, Math.max(2.5, 12 / Math.max(pitch, 0.5)));
+            var sigma = Math.max(2.2, Math.min(6, n / 34)) * pitch, AMP = Math.min(5, Math.max(2.5, 12 / Math.max(pitch, 0.5))) * amp;
             // magnified pitch of every bar, cumulative position, and the shift that pins the hovered point
-            var sc = new Array(n), left = new Array(n), acc = 0;
+            var sc = new Array(n), g = new Array(n), left = new Array(n), acc = 0;
             for (var i = 0; i < n; i++) {
-                var c = barLefts[i] + pitch / 2, d = (c - x) / sigma, g = Math.exp(-d * d / 2);
-                sc[i] = 1 + AMP * g; left[i] = acc; acc += pitch * sc[i];
+                var d = (barLefts[i] + pitch / 2 - x) / sigma;
+                g[i] = Math.exp(-d * d / 2); sc[i] = 1 + AMP * g[i]; left[i] = acc; acc += pitch * sc[i];
             }
             // pin the pointer onto the bar itself (a pointer in the 1 px gap counts as the bar's right edge)
             var bw = barW || pitch, frac = Math.max(0, Math.min(1, (x - barLefts[hot]) / bw));
             var shift = x - (left[hot] + frac * bw * sc[hot]);
             for (var j = 0; j < n; j++) {
-                var dx = left[j] + shift - barLefts[j], sy = 1 + 0.6 * (sc[j] - 1) / AMP;
-                bars[j].style.transform = "translateX(" + dx.toFixed(2) + "px) scale(" + sc[j].toFixed(3) + "," + sy.toFixed(3) + ")";
+                var dx = left[j] + shift - barLefts[j];
+                if (g[j] < 0.0005 && Math.abs(dx) < 0.01) { if (bars[j].style.transform) bars[j].style.transform = ""; continue; }
+                bars[j].style.transform = "translateX(" + dx.toFixed(2) + "px) scale(" + sc[j].toFixed(3) + "," + (1 + 0.6 * amp * g[j]).toFixed(3) + ")";
             }
-            if (hot !== lastHot) {
-                if (lastHot >= 0 && bars[lastHot]) bars[lastHot].classList.remove("hot");
-                bars[hot].classList.add("hot");
-                var info = self.layerInfo(hot + 1);
-                tip.innerHTML = "Layer " + num(hot + 1) + (info.length ? " · " + esc(info.join(" · ")) : "");
-                lastHot = hot;
+            if (trackHover) {
+                if (hot !== lastHot) {
+                    if (lastHot >= 0 && bars[lastHot]) bars[lastHot].classList.remove("hot");
+                    bars[hot].classList.add("hot");
+                    var info = self.layerInfo(hot + 1);
+                    tip.innerHTML = "Layer " + num(hot + 1) + (info.length ? " · " + esc(info.join(" · ")) : "");
+                    lastHot = hot;
+                }
+                tip.style.transform = "translateX(" + x.toFixed(1) + "px) translateX(-50%)";
+                tip.classList.add("show");
             }
-            tip.style.transform = "translateX(" + x.toFixed(1) + "px) translateX(-50%)";
-            tip.classList.add("show");
+            if (amp !== ampT) kick();                                 // still easing: keep the loop running
         }
-        self.layerCells.subscribe(function () { lastHot = -1; barLefts = null; if (trackHover && !trackFrame) trackFrame = requestAnimationFrame(magnify); });
+        self.layerCells.subscribe(function () { lastHot = -1; barLefts = null; if (amp > 0) kick(); });
         $(window).on("resize", function () { trackRect = null; barLefts = null; });
         document.addEventListener("scroll", function () { trackRect = null; }, true);
         self.trackMove = function (d, e) {
-            if (!trackHover) { trackHover = true; trackRect = null; clearTimeout(settleTimer); }
+            if (!trackHover) { trackHover = true; trackRect = null; }
+            ampT = 1;
             trackX = (e.originalEvent || e).clientX;
-            if (!trackFrame) trackFrame = requestAnimationFrame(magnify);
+            kick();
             return true;
         };
         // a click arms the layer shown in the label and lens (bars are under 2 px wide; the browser's pixel-snapped
         // hit test can land on the neighbour at a boundary)
         self.trackClick = function (layer) { self.pauseAtLayerClick(trackHover && lastHot >= 0 ? lastHot + 1 : layer); };
         self.trackLeave = function () {
-            trackHover = false;
+            trackHover = false; ampT = 0;
             var el = document.getElementById("kui-layers"), tip = document.getElementById("kui-laytip");
-            if (trackFrame) { cancelAnimationFrame(trackFrame); trackFrame = null; }
             if (tip) tip.classList.remove("show");
-            if (!el) return true;
-            if (lastHot >= 0 && el.children[lastHot]) el.children[lastHot].classList.remove("hot");
+            if (el && lastHot >= 0 && el.children[lastHot]) el.children[lastHot].classList.remove("hot");
             lastHot = -1;
-            el.classList.add("settling");                              // ease the bars back
-            Array.prototype.forEach.call(el.children, function (b) { b.style.transform = ""; });
-            clearTimeout(settleTimer); settleTimer = setTimeout(function () { el.classList.remove("settling"); }, 260);
+            kick();                                                    // ease the bars back from where they are
             return true;
         };
         self.layerTicks = ko.pureComputed(function () {
@@ -492,19 +582,46 @@ $(function () {
         });
         self.onEventPrintDone = function (p) {
             self.loadFiles();
+            jobDone("Print finished", "good", shortName(p && (p.name || p.path)) + (p && p.time ? " in " + self.fmtDur(p.time) : ""));
             self.notify("Print finished", shortName(p && (p.name || p.path)) + " is done" + (p && p.time ? " after " + self.fmtDur(p.time) : "") + ".", "kui-done");
         };
         self.onEventPrintFailed = function (p) {
             self.loadFiles();
+            var cancelled = p && p.reason === "cancelled";
+            jobDone(cancelled ? "Print cancelled" : "Print failed", cancelled ? "info" : "bad", shortName(p && (p.name || p.path)));
             self.notify("Print stopped", shortName(p && (p.name || p.path)) + (p && p.reason === "cancelled" ? " was cancelled." : " failed."), "kui-done");
         };
 
-        self.toastText = ko.observable(""); self.toastKind = ko.observable("");
-        var toastTimer = null;
-        self.toast = function (text, kind) {
-            self.toastText(text); self.toastKind(kind || "");
-            clearTimeout(toastTimer); toastTimer = setTimeout(function () { self.toastText(""); }, 5000);
+        // toasts: a short stack, newest at the bottom; hovering one holds it; "busy" ones stay until updated
+        self.toasts = ko.observableArray([]);
+        var toastSeq = 0;
+        function armToast(t) {
+            clearTimeout(t.timer);
+            if (t.kind() === "busy" || t.hold) return;
+            t.timer = setTimeout(function () { self.toastClose(t); }, t.kind() === "bad" ? 9000 : 4500);
+        }
+        self.toast = function (text, kind, detail) {
+            var t = { id: ++toastSeq, text: ko.observable(text), detail: ko.observable(detail || ""), kind: ko.observable(kind || "info"), leaving: ko.observable(false), timer: null, hold: false };
+            self.toasts.push(t);
+            var live = self.toasts().filter(function (x) { return !x.leaving(); });
+            if (live.length > 4) self.toastClose(live[0]);
+            armToast(t);
+            return t;
         };
+        self.toastSet = function (t, text, kind, detail) { t.text(text); t.kind(kind || "info"); t.detail(detail || ""); armToast(t); };
+        self.toastClose = function (t) {
+            if (t.leaving()) return;
+            t.leaving(true); clearTimeout(t.timer);
+            setTimeout(function () { self.toasts.remove(t); }, 200);
+        };
+        self.toastHold = function (t) { t.hold = true; clearTimeout(t.timer); };
+        self.toastRelease = function (t) { t.hold = false; armToast(t); };
+        self.toastIcon = function (t) { return { good: "fa-circle-check", bad: "fa-circle-exclamation" }[t.kind()] || "fa-circle-info"; };
+        self.toastText = ko.pureComputed(function () { var l = self.toasts(); return l.length ? l[l.length - 1].text() : ""; });
+        // losing the OctoPrint server (restart, Wi-Fi) is worth saying out loud
+        var serverToast = null;
+        self.onServerDisconnect = function () { if (!serverToast) serverToast = self.toast("Lost the connection to OctoPrint", "busy", "Reconnecting…"); return true; };
+        self.onDataUpdaterReconnect = function () { if (serverToast) { self.toastSet(serverToast, "Reconnected to OctoPrint", "good"); serverToast = null; } };
 
         self.openMenu = ko.observable(null);
         self.toggleMenu = function (name) { self.openMenu(self.openMenu() === name ? null : name); };
@@ -568,7 +685,7 @@ $(function () {
                 self.leaveEditorOk(function () { self.go(u.route, u.cfg); });
                 return;
             }
-            if (u.route === "editor" && u.cfg !== self.edName()) self.loadEditor(u.cfg);
+            if (u.route === "editor" && (u.cfg !== self.edName() || !self.edLoaded())) self.loadEditor(u.cfg);
             self.route(u.route);
         });
         function applyUrl() {
@@ -813,6 +930,11 @@ $(function () {
         });
         self.meshRows = ko.pureComputed(function () { return self.meshInfo().z; });
         self.meshCols = ko.pureComputed(function () { var z = self.meshRows(); return z.length ? z[0].length : 0; });
+        // the map keeps the probed area's real proportions (X span : Y span)
+        self.meshAspect = ko.pureComputed(function () {
+            var i = self.meshInfo(), w = (i.max[0] - i.min[0]) || 0, h = (i.max[1] - i.min[1]) || 0;
+            return w > 0 && h > 0 ? +(w / h).toFixed(4) : 1;
+        });
         function meshFlat() { return [].concat.apply([], self.meshRows()); }
         self.meshMin = ko.pureComputed(function () { var v = meshFlat(); return v.length ? Math.min.apply(null, v) : 0; });
         self.meshMax = ko.pureComputed(function () { var v = meshFlat(); return v.length ? Math.max.apply(null, v) : 0; });
@@ -1015,7 +1137,7 @@ $(function () {
             if (e.key === "Enter") {
                 var cmd = self.cmdText().trim();
                 if (cmd) {
-                    self.gcode(cmd);
+                    OctoPrint.control.sendGcode(cmd);
                     cmdHistory = cmdHistory.filter(function (h) { return h !== cmd; }); cmdHistory.push(cmd);
                     cmdHistory = cmdHistory.slice(-50); store("cmdHistory", JSON.stringify(cmdHistory));
                 }
@@ -1447,8 +1569,10 @@ $(function () {
             // measure in place and only touch spans that change (resetting them collapsed the page and
             // threw the scroll position back to the top while printing)
             var main = document.getElementById("kui-main"), keep = main ? main.scrollTop : 0;
+            fitLive(g, cols, main);
             Array.prototype.forEach.call(g.children, function (c) {
-                if ($(c).hasClass("wide")) {
+                if (c.id === "kui-live") { /* sized by fitLive */ }
+                else if ($(c).hasClass("wide")) {
                     var span = cols >= 6 ? "span 3" : (cols >= 2 ? "span 2" : "auto");
                     if (c.style.gridColumn !== span) c.style.gridColumn = span;
                 }
@@ -1457,6 +1581,27 @@ $(function () {
             });
             if (main && main.scrollTop !== keep) main.scrollTop = keep;
         };
+        // Live view: as many card columns as the screen height can feed at the camera's 4:3, keeping two
+        // columns for the other cards; the pane height follows the width and stops where the card would
+        // leave the viewport (big screens get a big view, small ones keep the plain 2-column card)
+        function fitLive(g, cols, main) {
+            var card = document.getElementById("kui-live"), pane = card && card.querySelector(".pane");
+            if (!card || !pane) return;
+            var small = window.matchMedia("(max-width: 760px)").matches, span = cols >= 2 ? 2 : 1;
+            var top = $("#kui-main > section:visible > .top").outerHeight() || 76;
+            var dock = parseFloat(getComputedStyle(document.getElementById("kui")).getPropertyValue("--dock")) || 44;
+            var chrome = card.getBoundingClientRect().height - pane.getBoundingClientRect().height;
+            var availH = Math.floor(window.innerHeight - top - dock - chrome - 10 - 24);
+            if (cols >= 4) {
+                var cardW = Math.max(300, availH) * 4 / 3 + 40;   // 40 = card side padding
+                span = Math.max(2, Math.min(cols - 2, Math.round((cardW + 24) / 324)));
+            }
+            var want = cols >= 2 ? "span " + span : "auto";
+            if (card.style.gridColumn !== want) card.style.gridColumn = want;
+            var h = small ? 0 : Math.round(Math.max(320, Math.min(pane.clientWidth * 3 / 4, availH)));
+            var hs = h ? h + "px" : "";
+            if (pane.style.height !== hs) pane.style.height = hs;
+        }
         self.measureBars = function () {
             var root = document.getElementById("kui");
             if (!root) return;
@@ -1506,6 +1651,7 @@ $(function () {
             if (plugin !== PLUGIN) return;
             if (data.klipper) self.applyKlipper(data.klipper);
             if (data.console) self.addConsole(data.console);
+            if (data.run) finishRun(data.run);
         };
         self.layerTotal.subscribe(schedulePack);
         self.armed.subscribe(schedulePack);

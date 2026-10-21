@@ -24,10 +24,10 @@
 }
 
 /* ---------- take over the page ---------- */
-html.kui-on { color-scheme: dark; overscroll-behavior: none; background: var(--ground); }
+html.kui-on { color-scheme: dark; overscroll-behavior: none; overflow: hidden; background: var(--ground); }
 html.kui-on body { background: var(--ground); padding: 0 !important; overflow: hidden; }
 html.kui-on body > #navbar, html.kui-on body > .container.octoprint-container, html.kui-on body > .container,
-html.kui-on body > .footer { visibility: hidden; height: 0; overflow: hidden; margin: 0; padding: 0; }
+html.kui-on body > .footer { visibility: hidden; height: 0; max-width: 100vw; overflow: hidden; margin: 0; padding: 0; }
 #kui { display: none; }
 html.kui-on #kui { display: block; position: fixed; inset: 0; z-index: 1000; }
 /* scrollbars */
@@ -205,8 +205,8 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .pane { position: relative; height: 420px; border-radius: 4px; background: #0d0c10; overflow: hidden; }
 #kui .pane > .v { position: absolute; inset: 0; }
 #kui .pane .v-empty { position: absolute; inset: 0; display: flex; gap: 8px; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
-#kui #kui-v-webcam { display: grid; place-items: center; }
-#kui #kui-webcam { max-width: 100%; max-height: 100%; object-fit: contain; }
+#kui #kui-v-webcam { display: block; }
+#kui #kui-webcam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
 #kui .camchip { position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: 999px; background: rgba(13,12,16,.72); backdrop-filter: blur(6px); font-size: var(--fs-small); color: var(--text); pointer-events: none; }
 #kui .camchip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--positive); box-shadow: 0 0 0 3px rgba(68,162,130,.22); }
 #kui .camchip .num { color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -278,7 +278,6 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .layerwrap { position: relative; }
 #kui .layers { display: flex; gap: 1px; height: 44px; align-items: flex-end; clip-path: inset(-60px 0 0 0); }
 #kui .layers button { flex: 1 1 0; min-width: 0; height: 18px; background: #2a2930; border-radius: 1px; border: 0; padding: 0; cursor: pointer; transform-origin: 0 100%; will-change: transform; }
-#kui .layers.settling button { transition: transform .24s cubic-bezier(.2, .8, .2, 1); }
 #kui .layers button.hot { box-shadow: 0 0 0 1px #fff; }
 #kui .layers button.done { background: var(--accent); }
 #kui .layers button.now { height: 30px; background: #fff; }
@@ -288,8 +287,8 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .layers button.was-m600 { box-shadow: inset 0 3px 0 #f0c86e; }
 
 #kui .layers.off button { cursor: default; }
-#kui .laytip { position: absolute; left: 0; bottom: 54px; white-space: nowrap; background: var(--raised); color: #fff; font-size: 12px; padding: 4px 10px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.45); pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 3; }
-#kui .laytip.show { opacity: 1; }
+#kui .laytip { position: absolute; left: 0; bottom: 54px; white-space: nowrap; background: var(--raised); color: #fff; font-size: 12px; padding: 4px 10px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.45); pointer-events: none; opacity: 0; translate: 0 4px; transition: opacity .14s ease-out, translate .18s cubic-bezier(.2, .8, .2, 1); z-index: 3; }
+#kui .laytip.show { opacity: 1; translate: 0 0; }
 #kui .laytip .num { color: var(--accent-ink); }
 #kui .laylegend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 11px; color: var(--muted); }
 #kui .laylegend span { display: inline-flex; gap: 6px; align-items: center; }
@@ -297,7 +296,7 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .laylegend .sw.done { background: var(--accent); } #kui .laylegend .sw.now { background: #fff; }
 #kui .laylegend .sw.pause { background: #4a8ad6; } #kui .laylegend .sw.m600 { background: var(--warning); }
 #kui .laylegend .sw.was { background: #2a2930; box-shadow: inset 0 3px 0 #7fa9de; }
-@media (prefers-reduced-motion: reduce) { #kui .laytip, #kui .layers.settling button { transition: none; } }
+@media (prefers-reduced-motion: reduce) { #kui .laytip { transition: none; } }
 #kui .track-foot { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; }
 
 /* ---------- figures ---------- */
@@ -394,11 +393,13 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .statgrid .v { font: 500 20px/28px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #kui .statgrid .v small { color: var(--muted); font-size: 12px; font-weight: 400; }
 #kui .twocol { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 24px; align-items: start; }
-#kui .heat { display: grid; gap: 3px; }
-#kui .heat div { aspect-ratio: 1.4; border-radius: 2px; display: grid; place-items: center; font: 11px var(--mono); }
+/* the map fills the card but never grows past the viewport: width is capped by the height budget x the probed area's aspect */
+#kui { --fit-h: max(300px, calc(100dvh - var(--topbar, 76px) - var(--dock) - 330px)); }
+#kui .heat { display: grid; gap: 3px; aspect-ratio: var(--ar, 1); width: min(100% - 28px, calc(var(--fit-h) * var(--ar, 1))); }
+#kui .heat div { min-height: 0; border-radius: 2px; display: grid; place-items: center; font: 11px var(--mono); overflow: hidden; }
 #kui .heat-scale { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12px; color: var(--muted); }
 #kui .heat-scale .ramp { flex: 1; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #2a5e9e, #1f2a36 50%, #e8792f); }
-#kui #kui-mesh3d { height: 460px; }
+#kui #kui-mesh3d { height: max(360px, calc(var(--fit-h) + 40px)); }
 #kui .log { list-style: none; }
 #kui .log li { display: grid; grid-template-columns: 64px 16px 1fr; gap: 8px; padding: 7px 0; font-size: 13px; align-items: start; }
 #kui .log li + li { border-top: 1px solid var(--rule); }
@@ -407,7 +408,7 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .log .warn .ico, #kui .log .warn .msg { color: var(--warning); }
 #kui .log .ok .ico { color: var(--pill-positive-ink); }
 #kui .log .msg { overflow-wrap: anywhere; }
-#kui .logbox { max-height: 520px; overflow-y: auto; overscroll-behavior: contain; }
+#kui .logbox { max-height: max(320px, calc(100dvh - var(--topbar, 76px) - var(--dock) - 240px)); overflow-y: auto; overscroll-behavior: contain; }
 #kui .cfg { list-style: none; }
 #kui .cfg li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 10px 0; align-items: center; }
 #kui .cfg li + li { border-top: 1px solid var(--rule); }
@@ -424,12 +425,13 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .flist li[aria-current] { background: var(--raised); }
 #kui .flist li .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); }
 #kui .flist li .lnk { color: var(--muted); text-decoration: underline; font-size: 12px; background: none; border: 0; cursor: pointer; padding: 0; }
-#kui .code { background: #0d0c10; border-radius: 6px; overflow: hidden; }
+#kui .code { background: #0d0c10; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; height: max(460px, calc(100dvh - var(--topbar, 76px) - var(--dock) - 34px)); }
+#kui .editor > aside { position: sticky; top: calc(var(--topbar, 76px) + 10px); max-height: calc(100dvh - var(--topbar, 76px) - var(--dock) - 34px); overflow-y: auto; }
 #kui .code .bar2 { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--rule); font-size: 13px; flex-wrap: wrap; }
 #kui .code .bar2 .dirty { color: var(--warning); font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
 #kui .code .bar2 .spacer { flex: 1; }
 #kui .code .findbar { display: flex; gap: 8px; align-items: center; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--rule); }
-#kui .code .area { position: relative; height: 560px; }
+#kui .code .area { position: relative; flex: 1; min-height: 0; }
 #kui .code .gutter, #kui .code .hl, #kui .code textarea { font: 13px/21px var(--mono) !important; tab-size: 4; padding-top: 12px; padding-bottom: 12px; letter-spacing: 0; }
 #kui .code .gutter { position: absolute; left: 0; top: 0; bottom: 0; width: 58px; overflow: hidden; color: #4f4e56; text-align: right; padding-right: 14px; user-select: none; }
 #kui .code .gutter span { display: block; height: 21px; }
@@ -487,13 +489,35 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 #kui .totop { position: fixed; right: 24px; bottom: calc(var(--dock) + var(--conh-open, 0px) + 16px); z-index: 19; height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--control); background: var(--raised); color: var(--text); display: inline-flex; gap: 8px; align-items: center; cursor: pointer; box-shadow: 0 12px 28px rgba(0,0,0,.45); font-size: 13px; }
 #kui .totop i { color: var(--muted); }
 #kui .totop:hover { border-color: #5a5a60; }
-#kui .toast { position: fixed; right: 24px; bottom: calc(var(--dock) + var(--conh-open, 0px) + 64px); z-index: 50; background: var(--raised); border-radius: 6px; box-shadow: 0 12px 28px rgba(0,0,0,.45); padding: 12px 16px; font-size: 13px; display: flex; gap: 10px; align-items: center; max-width: 420px; }
-#kui .toast.bad i { color: var(--negative); } #kui .toast.good i { color: var(--pill-positive-ink); }
+/* toasts: newest at the bottom, above the console dock; each one slides in, and out sideways */
+#kui .toasts { position: fixed; right: 24px; bottom: calc(var(--dock) + var(--conh-open, 0px) + 64px); z-index: 50; width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+#kui .toast { pointer-events: auto; position: relative; display: grid; grid-template-columns: 16px minmax(0, 1fr) 26px; gap: 10px; align-items: start; padding: 11px 6px 11px 14px; border-radius: 8px; background: var(--raised); box-shadow: 0 16px 36px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.05); font-size: 13px; line-height: 18px; overflow: hidden; animation: kui-toast-in .24s cubic-bezier(.2, .8, .2, 1); }
+#kui .toast::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--muted); transition: background .2s; }
+#kui .toast.good::before { background: var(--positive); } #kui .toast.bad::before { background: var(--negative); } #kui .toast.busy::before { background: var(--accent); }
+#kui .toast .ti { display: grid; place-items: center; height: 18px; color: var(--muted); }
+#kui .toast .ti .spin { width: 13px; height: 13px; }
+#kui .toast.good .ti { color: var(--pill-positive-ink); } #kui .toast.bad .ti { color: var(--negative); }
+#kui .toast .tx { min-width: 0; padding-top: 0; }
+#kui .toast .dt { color: var(--muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+#kui .toast .tclose { width: 26px; height: 26px; margin-top: -4px; border: 0; border-radius: 50%; background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; opacity: .7; }
+#kui .toast .tclose:hover { opacity: 1; color: var(--text); background: #2c2b30; }
+#kui .toast.leaving { animation: kui-toast-out .2s cubic-bezier(.4, 0, 1, 1) forwards; }
+@keyframes kui-toast-in { from { opacity: 0; transform: translateY(12px) scale(.97); } }
+@keyframes kui-toast-out { to { opacity: 0; transform: translateX(24px); } }
+
+/* press and busy feedback on buttons */
+#kui .kb, #kui .iconbtn, #kui .seg button { transition: transform .08s ease-out, background-color .15s, border-color .15s, color .15s; }
+#kui .kb:active:not([disabled]), #kui .iconbtn:active { transform: scale(.97); }
+#kui .kb.is-busy { pointer-events: none; }
+#kui .kb.is-busy > i::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; vertical-align: -1px; animation: kui-spin .7s linear infinite; }
+#kui .kb.is-busy > i { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { #kui .toast, #kui .toast.leaving { animation-duration: .01s; } }
 
 /* ---------- phone & tablet ---------- */
 @media (max-width: 1100px) {
   #kui .split, #kui .twocol, #kui .fm3, #kui .editor { grid-template-columns: minmax(0, 1fr); }
   #kui .detail { position: static; }
+  #kui .editor > aside { position: static; max-height: none; }
   #kui .statgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #kui .statgrid > div:nth-child(3) { border-left: 0; }
 }
@@ -505,6 +529,7 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
   #kui .rail a[aria-current]::before { right: 20%; left: 20%; top: -5px; bottom: auto; width: auto; height: 1px; }
   #kui .main { padding-bottom: calc(60px + var(--dock) + 24px); }
   #kui .dock { left: 0; bottom: 60px; }
+  #kui .toasts { right: 16px; bottom: calc(60px + var(--dock) + var(--conh-open, 0px) + 12px); }
   #kui .canvas { grid-template-columns: minmax(0, 1fr); padding: 16px 16px 0; }
   #kui .card.wide { grid-column: auto !important; }
   #kui .view { padding: 16px 16px 0; }

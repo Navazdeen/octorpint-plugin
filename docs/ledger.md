@@ -50,4 +50,15 @@ Klipper is deployed while a print is running.
 | W1 | Live webcam sometimes freezes or goes blank, then comes back. Cause: mjpg-streamer itself never crashed (one start per boot, no errors, 8 fps steady over 90 s), but the Cubie's Wi-Fi (AIC8800) ran with power saving on, which holds packets while dozing (ping spikes to 67 ms), and the UI's plain `<img src>` never recovers once an MJPEG connection stalls | fixed: Wi-Fi power save off now (`iwconfig`) and on every boot (`/etc/NetworkManager/conf.d/99-wifi-powersave-off.conf`) |
 | W2 | UI webcam had no recovery or status. Now reads the stream with fetch: a stall (no frame for 5 s) or a dropped connection reconnects with backoff (1, 2, 4, 8, 10 s), shows "Reconnecting in N s" with Retry now, a Live + fps chip, and stops streaming while the tab is hidden or another view is shown. Also follows webcam URL changes from Settings | deployed + verified (`tools/shot/cam.js`: stall caught at 5.0 s, live again 1.2 s later) |
 
+## Production polish (2026-10-21)
+
+| # | Issue | Status |
+|---|---|---|
+| P1 | Live view didn't use big screens (fixed 420 px pane, 640×480 image). The Live card now spans as many card columns as the screen height can feed at the camera's 4:3, keeping two columns for the other cards; the pane height follows and stops at the viewport; the image scales to fill (2560: 1556×1099, 1920: 908×681) | deployed + verified |
+| P2 | Config editor, Klipper log and 3D mesh had fixed heights; they now fill the viewport. The mesh map keeps the probed area's real X:Y proportions and fits the screen | deployed + verified |
+| P3 | Magnifier animation: strength now eases in (~90 ms) and out (~160 ms) in one rAF loop; the focus stays on the pointer (no lag); re-entering mid-way continues without snapping | deployed + verified (probe13: 80-81/81 aligned, monotonic ease in/out) |
+| P4 | Feedback: toast stack (busy → done/failed, hover to hold, dismiss); button G-code runs through Klipper's API socket so the UI knows when it finished and shows Klipper's error text; the clicked button shows a spinner; toasts for print start/pause/resume/finish/cancel, Klipper ready/shutdown/error, and lost/regained OctoPrint connection | deployed + verified (polish.js) |
+| P5 | Page could scroll sideways on phones (OctoPrint's hidden navbar was wider than the screen) | deployed + verified |
+| P6 | Back/forward into printer.cfg before it had loaded showed an empty editor | deployed + verified |
+
 Verification: `tools/shot/verify.js` + `probe8.js` (U1, U3–U12 pass; print-only states simulated in the browser only).

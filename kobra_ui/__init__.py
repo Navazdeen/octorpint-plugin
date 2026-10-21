@@ -27,9 +27,11 @@ _LAYER_CACHE = {}
 SAVE_CONFIG_MARK = "#*#"
 MAX_CONFIG_BYTES = 1024 * 1024
 CONSOLE_LINES = 300
+RUN_TIMEOUT = 30 * 60  # longest a button command may run (heat soak + mesh fits easily)
 
 SUBSCRIBE_OBJECTS = {
     "webhooks": ["state", "state_message"],
+    "idle_timeout": ["state"],
     "print_stats": ["info", "state"],
     "pause_resume": ["is_paused"],
     "gcode_macro PAUSE": ["reason", "m600", "extruder_temp"],
@@ -235,7 +237,7 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
         return True
 
     def get_api_commands(self):
-        return {"estop": []}
+        return {"estop": [], "run": ["script"]}
 
     def on_api_command(self, command, data):
         if command == "estop":
@@ -249,6 +251,52 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
                 sock.close()
             self._logger.warning("Emergency stop requested from the Kobra UI")
             return flask.jsonify({"sent": True})
+        if command == "run":
+            # A button's G-code goes straight to Klipper so the UI learns when it finished and why it failed
+            # (gcode/script answers only once the script is done, with Klipper's own error text). It runs in
+            # a thread and the result is pushed, so a 3-minute mesh probe never holds an HTTP worker.
+            if not Permissions.CONTROL.can():
+                return flask.abort(403)
+            script = str(data.get("script") or "").strip()
+            rid = str(data.get("id") or "")[:40]
+            if not script or len(script) > 2000:
+                return flask.abort(400)
+            if not os.path.exists(KLIPPY_SOCKET):
+                return flask.make_response(flask.jsonify({"error": "Klipper's API socket is missing"}), 503)
+            self._add_console("send", script)
+            threading.Thread(target=self._run_script, args=(rid, script), daemon=True, name="kobra_ui-run").start()
+            return flask.jsonify({"accepted": True, "id": rid})
+
+    def _run_script(self, rid, script):
+        started = time.time()
+        result = {"id": rid, "ok": False, "error": None}
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(1.0)
+        try:
+            sock.connect(KLIPPY_SOCKET)
+            reader = _Reader(sock)
+            rid_sock = reader.next_id
+            reader.next_id += 1
+            sock.sendall(json.dumps({"id": rid_sock, "method": "gcode/script", "params": {"script": script}}).encode() + b"\x03")
+            while time.time() - started < RUN_TIMEOUT:
+                msg = reader.next()
+                if msg is None or msg.get("id") != rid_sock:
+                    continue
+                if "error" in msg:
+                    result["error"] = (msg["error"] or {}).get("message") or "Klipper rejected the command"
+                else:
+                    result["ok"] = True
+                break
+            else:
+                result["error"] = "No answer from Klipper after %d minutes" % (RUN_TIMEOUT // 60)
+        except (OSError, ConnectionError, ValueError) as exc:
+            result["error"] = "Klipper's API socket closed (%s)" % exc
+        finally:
+            sock.close()
+        result["secs"] = round(time.time() - started, 1)
+        if result["error"]:
+            self._add_console("err", result["error"])
+        self._plugin_manager.send_plugin_message(self._identifier, {"run": result})
 
     def on_api_get(self, request):
         with self._console_lock:
@@ -439,7 +487,7 @@ def _history(name):
 
 
 __plugin_name__ = "Kobra UI"
-__plugin_version__ = "2.5.3"
+__plugin_version__ = "2.6.2"
 __plugin_description__ = "Full-screen console for the Kobra 2 Neo on OctoPrint + Klipper"
 __plugin_pythoncompat__ = ">=3.9,<4"
 __plugin_implementation__ = KobraUiPlugin()
