@@ -135,3 +135,46 @@ def parse_macros(settings):
         })
     macros.sort(key=lambda m: m["name"])
     return macros
+
+
+VALUE_RE = re.compile(r"^[A-Za-z0-9_.+\-]{1,40}$")
+_SECTION = re.compile(r"^\[([^\]]+)\]\s*$")
+
+
+def check_value(name, value):
+    if not VALUE_RE.match(value):
+        raise ValueError("%s: use a number or a single word (letters, digits, . _ + -), at most 40 characters" % name)
+
+
+def build_script(macros, name, params):
+    """The G-code line for a deck run: a known macro and its known parameters, values checked."""
+    macro = next((m for m in macros if m["name"] == str(name).upper()), None)
+    if macro is None:
+        raise ValueError("%s: no such macro in the Klipper config" % str(name).upper())
+    known = [p["name"] for p in macro["params"]]
+    given = {str(k).upper(): v for k, v in (params or {}).items()}
+    for key in given:
+        if key not in known:
+            raise ValueError("%s: %s doesn't take this parameter" % (key, macro["name"]))
+    parts = [macro["name"]]
+    for key in known:
+        value = given.get(key)
+        if value is None or str(value).strip() == "":
+            continue
+        value = str(value).strip()
+        check_value(key, value)
+        parts.append("%s=%s" % (key, value))
+    return " ".join(parts)
+
+
+def config_outline(files):
+    """[section] headers of the config files with 1-based line numbers; the SAVE_CONFIG block is skipped."""
+    out = []
+    for fname, text in files.items():
+        for i, line in enumerate(text.splitlines(), 1):
+            if line.startswith("#*#"):
+                continue
+            m = _SECTION.match(line)
+            if m:
+                out.append({"file": fname, "section": m.group(1).strip(), "line": i})
+    return out

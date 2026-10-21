@@ -1,6 +1,6 @@
 import pytest
 
-from macros import parse_macros
+from macros import build_script, config_outline, parse_macros
 from tests.conftest import load_fixture
 
 FIX = load_fixture()
@@ -66,3 +66,29 @@ def test_hints_ignore_messages_and_heater_off():
 def test_setting_defaults_are_unquoted():
     p = {x["name"]: x for x in by_name()["START_PRINT"]["params"]}
     assert p["MESH"]["default"] == "adaptive" and p["MESH"]["source"] == "_PRINTER_SETTINGS start_mesh"
+
+
+def test_build_script_basic():
+    assert build_script(MS, "load_filament", {"LENGTH": "60", "PURGE": "", "TEMP": None}) == "LOAD_FILAMENT LENGTH=60"
+    assert build_script(MS, "COOLDOWN", {}) == "COOLDOWN"  # Review Focus 2
+
+
+@pytest.mark.parametrize("bad", ["60 PURGE=1", "1\nM112", "a;b", "x" * 41, "{x}"])
+def test_build_script_rejects_values(bad):
+    with pytest.raises(ValueError, match="LENGTH"):
+        build_script(MS, "LOAD_FILAMENT", {"LENGTH": bad})
+
+
+def test_build_script_rejects_unknown():
+    with pytest.raises(ValueError, match="NOPE"):
+        build_script(MS, "NOPE", {})
+    with pytest.raises(ValueError, match="SPEED"):
+        build_script(MS, "LOAD_FILAMENT", {"SPEED": "5"})
+
+
+def test_config_outline():
+    out = config_outline({"macros.cfg": "# c\n[gcode_macro PARK]\ngcode:\n  G28\n\n[gcode_macro COOLDOWN]\n",
+                          "printer.cfg": "[printer]\nkinematics: cartesian\n#*# [bed_mesh default]\n"})
+    assert {"file": "macros.cfg", "section": "gcode_macro PARK", "line": 2} in out
+    assert {"file": "printer.cfg", "section": "printer", "line": 1} in out
+    assert not any(o["section"].startswith("bed_mesh") for o in out)  # SAVE_CONFIG block skipped
