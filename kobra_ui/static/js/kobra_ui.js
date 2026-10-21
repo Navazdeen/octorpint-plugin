@@ -1753,14 +1753,15 @@ $(function () {
             var top = $("#kui-main > section:visible > .top").outerHeight() || 76;
             var dock = parseFloat(getComputedStyle(document.getElementById("kui")).getPropertyValue("--dock")) || 44;
             var chrome = card.getBoundingClientRect().height - pane.getBoundingClientRect().height;
-            var availH = Math.floor(window.innerHeight - top - dock - chrome - 10 - 24);
+            var con = self.dockOpen() ? self.conH() : 0;   // an open console takes its height off the screen
+            var availH = Math.floor(window.innerHeight - top - dock - con - chrome - 10 - 24);
             if (cols >= 4) {
                 var cardW = Math.max(300, availH) * 4 / 3 + 40;   // 40 = card side padding
                 span = Math.max(2, Math.min(cols - 2, Math.round((cardW + 24) / 324)));
             }
             var want = cols >= 2 ? "span " + span : "auto";
             if (card.style.gridColumn !== want) card.style.gridColumn = want;
-            var h = small ? 0 : Math.round(Math.max(320, Math.min(pane.clientWidth * 3 / 4, availH)));
+            var h = small ? 0 : Math.round(Math.max(con ? 240 : 320, Math.min(pane.clientWidth * 3 / 4, availH)));
             var hs = h ? h + "px" : "";
             if (pane.style.height !== hs) pane.style.height = hs;
         }
@@ -1816,6 +1817,8 @@ $(function () {
             if (data.run) finishRun(data.run);
         };
         self.layerTotal.subscribe(schedulePack);
+        self.dockOpen.subscribe(schedulePack);
+        self.conH.subscribe(schedulePack);
         self.armed.subscribe(schedulePack);
         self.isPrinting.subscribe(schedulePack);
         self.isPaused.subscribe(schedulePack);
