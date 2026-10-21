@@ -612,3 +612,19 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
 @keyframes kui-shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
 
 @media (max-width: 1100px) { #kui .deckwrap { grid-template-columns: minmax(0, 1fr); } #kui .deckpanel { position: static; } }
+#kui .toast .tact { margin-top: 8px; height: 26px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--control); background: none; color: var(--text); font-size: 12px; cursor: pointer; }
+#kui .toast .tact:hover { border-color: var(--accent); }
+#kui #kui-deck.editing .tile { touch-action: none; }
+#kui .tile.lifting { z-index: 20; pointer-events: none; cursor: grabbing; box-shadow: 0 18px 40px rgba(0,0,0,.55); border-color: var(--accent); transition: none; }
+#kui .tile .tpop { position: absolute; right: 6px; top: 6px; }
+#kui .tile .tmenu-btn { width: 24px; height: 24px; background: #1c1b20; }
+#kui .tile .tmenu { top: 28px; right: 0; min-width: 230px; cursor: default; }
+#kui .tile .tmenu .swatches { display: flex; gap: 8px; padding: 8px 10px 6px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin: 4px 0; }
+#kui .tile .tmenu .sw { width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid #4a4a50; background: #26252b; flex: none; }
+#kui .tile .tmenu .sw.c-orange { background: var(--accent); } #kui .tile .tmenu .sw.c-blue { background: #4a8ad6; }
+#kui .tile .tmenu .sw.c-green { background: var(--positive); } #kui .tile .tmenu .sw.c-red { background: var(--negative); }
+#kui .tile .tmenu .sw.on { box-shadow: 0 0 0 2px var(--raised), 0 0 0 3px #fff; }
+#kui #kui-deck.editing .tile .pinmark { visibility: hidden; }
+#kui .lbl3 .renamable { cursor: text; border-bottom: 1px dashed #4a4a50; }
+#kui .newgroup { margin-top: 16px; height: 56px; border-radius: 8px; border: 1px dashed #4a4a50; display: flex; gap: 10px; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; transition: border-color .15s, color .15s, background-color .15s; }
+#kui .newgroup.over { border-color: var(--accent); color: var(--text); background: #1d1915; }

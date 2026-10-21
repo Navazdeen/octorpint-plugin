@@ -612,10 +612,11 @@ $(function () {
         function armToast(t) {
             clearTimeout(t.timer);
             if (t.kind() === "busy" || t.hold) return;
-            t.timer = setTimeout(function () { self.toastClose(t); }, t.kind() === "bad" ? 9000 : 4500);
+            t.timer = setTimeout(function () { self.toastClose(t); }, t.action ? 6000 : (t.kind() === "bad" ? 9000 : 4500));
         }
-        self.toast = function (text, kind, detail) {
-            var t = { id: ++toastSeq, text: ko.observable(text), detail: ko.observable(detail || ""), kind: ko.observable(kind || "info"), leaving: ko.observable(false), timer: null, hold: false };
+        // action: optional { label, fn } button on the toast (Undo)
+        self.toast = function (text, kind, detail, action) {
+            var t = { id: ++toastSeq, text: ko.observable(text), detail: ko.observable(detail || ""), kind: ko.observable(kind || "info"), leaving: ko.observable(false), timer: null, hold: false, action: action || null };
             self.toasts.push(t);
             var live = self.toasts().filter(function (x) { return !x.leaving(); });
             if (live.length > 4) self.toastClose(live[0]);
@@ -623,6 +624,7 @@ $(function () {
             return t;
         };
         self.toastSet = function (t, text, kind, detail) { t.text(text); t.kind(kind || "info"); t.detail(detail || ""); armToast(t); };
+        self.toastAct = function (t) { var a = t.action; self.toastClose(t); if (a && a.fn) a.fn(); };
         self.toastClose = function (t) {
             if (t.leaving()) return;
             t.leaving(true); clearTimeout(t.timer);

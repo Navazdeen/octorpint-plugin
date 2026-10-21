@@ -287,7 +287,7 @@
               <p class="empty" data-bind="visible: !deckLoaded()">Reading macros from Klipper…</p>
               <div id="kui-deck" data-bind="css: { editing: deckEdit() }, foreach: deckSections">
                 <div class="dgroup" data-bind="attr: { 'data-group': id }">
-                  <div class="lbl3"><span data-bind="text: name"></span><span class="line"></span></div>
+                  <div class="lbl3"><span data-bind="text: name, click: $root.renameGroup, css: { renamable: $root.deckEdit() && id !== 'all' }"></span><span class="line"></span></div>
                   <div class="deck" data-bind="foreach: tiles">
                     <div tabindex="0" role="button" data-bind="attr: { class: $root.tileClass($data), 'data-name': key, 'data-flip': key, 'aria-pressed': $root.selMacro() === key ? 'true' : 'false', 'aria-label': label }, click: $root.tileClick, event: { dblclick: $root.tileDblClick, keydown: $root.tileKey }">
                       <span class="grip" aria-hidden="true"><i class="fa-solid fa-grip-vertical"></i></span>
@@ -296,6 +296,25 @@
                       <span class="pinmark" aria-hidden="true"><i class="fa-solid fa-thumbtack" data-bind="visible: pinned"></i></span>
                       <span class="d" data-bind="text: missing ? 'Missing: not in the Klipper config' : desc"></span>
                       <span class="chips" data-bind="foreach: chips"><span class="chip num"><b data-bind="text: k"></b> <span data-bind="text: v"></span></span></span>
+                      <span class="pop tpop" data-bind="visible: $root.deckEdit()">
+                        <button class="iconbtn sm tmenu-btn" aria-label="Tile options" data-bind="click: $root.tileMenu, clickBubble: false, attr: { 'aria-expanded': $root.tileMenuOpen($data) ? 'true' : 'false' }"><i class="fa-solid fa-ellipsis"></i></button>
+                        <div class="menu tmenu" role="menu" data-bind="visible: $root.tileMenuOpen($data), click: function () { return true; }, clickBubble: false">
+                          <button role="menuitem" data-bind="click: $root.tilePin"><i class="fa-solid fa-thumbtack"></i><span data-bind="text: pinned ? 'Remove from Printer screen' : 'Pin to Printer screen'"></span></button>
+                          <button role="menuitem" data-bind="click: $root.tileHide"><i class="fa-solid" data-bind="css: hidden ? 'fa-eye' : 'fa-eye-slash'"></i><span data-bind="text: hidden ? 'Show' : 'Hide'"></span></button>
+                          <button role="menuitem" data-bind="click: $root.tileConfirm"><i class="fa-solid fa-circle-exclamation"></i><span data-bind="text: confirm ? 'Run without asking' : 'Always ask first'"></span></button>
+                          <div class="swatches" role="group" aria-label="Colour">
+                            <button class="sw" aria-label="No colour" data-bind="click: function () { $root.tileColor($data, '') }, css: { on: !color }"></button>
+                            <button class="sw c-orange" aria-label="Orange" data-bind="click: function () { $root.tileColor($data, 'orange') }, css: { on: color === 'orange' }"></button>
+                            <button class="sw c-blue" aria-label="Blue" data-bind="click: function () { $root.tileColor($data, 'blue') }, css: { on: color === 'blue' }"></button>
+                            <button class="sw c-green" aria-label="Green" data-bind="click: function () { $root.tileColor($data, 'green') }, css: { on: color === 'green' }"></button>
+                            <button class="sw c-red" aria-label="Red" data-bind="click: function () { $root.tileColor($data, 'red') }, css: { on: color === 'red' }"></button>
+                          </div>
+                          <!-- ko if: preset -->
+                          <button role="menuitem" data-bind="click: $root.tileRename"><i class="fa-solid fa-pen"></i>Rename</button>
+                          <button role="menuitem" class="danger" data-bind="click: $root.tileDelete"><i class="fa-regular fa-trash-can"></i>Delete</button>
+                          <!-- /ko -->
+                        </div>
+                      </span>
                       <span class="flags" aria-hidden="true">
                         <i class="fa-solid fa-fire" title="Heats" data-bind="visible: $root.hasHint($data, 'heats')"></i>
                         <i class="fa-solid fa-house" title="Homes" data-bind="visible: $root.hasHint($data, 'homes')"></i>
@@ -305,6 +324,7 @@
                   </div>
                 </div>
               </div>
+              <div class="newgroup" data-bind="visible: deckEdit()"><i class="fa-solid fa-plus"></i>Drop a tile here to start a new group</div>
             </section>
 
             <section class="card deckpanel" id="kui-deck-panel" aria-live="polite" data-bind="with: selTile">
@@ -707,7 +727,8 @@
   <div class="toasts" role="status" aria-live="polite" data-bind="foreach: toasts">
     <div class="toast" data-bind="css: kind() + (leaving() ? ' leaving' : ''), event: { mouseenter: $root.toastHold, mouseleave: $root.toastRelease }">
       <span class="ti" aria-hidden="true"><!-- ko if: kind() === 'busy' --><span class="spin"></span><!-- /ko --><!-- ko ifnot: kind() === 'busy' --><i class="fa-solid" data-bind="css: $root.toastIcon($data)"></i><!-- /ko --></span>
-      <div class="tx"><div data-bind="text: text"></div><div class="dt" data-bind="visible: detail(), text: detail()"></div></div>
+      <div class="tx"><div data-bind="text: text"></div><div class="dt" data-bind="visible: detail(), text: detail()"></div>
+        <button class="tact" data-bind="visible: action, click: $root.toastAct"><span data-bind="text: action ? action.label : ''"></span></button></div>
       <button class="tclose" aria-label="Dismiss" data-bind="click: $root.toastClose"><i class="fa-solid fa-xmark"></i></button>
     </div>
   </div>
