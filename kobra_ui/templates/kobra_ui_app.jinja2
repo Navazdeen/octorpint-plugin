@@ -1,4 +1,6 @@
 <!-- Kobra UI: full-screen app, built 1:1 from the approved mockups. Bound to KobraUiViewModel. -->
+<script>/* take over as soon as the page is parsed, so OctoPrint's loading screen already has the Kobra look */
+try { if (window.localStorage.getItem("kobra_ui.classic") !== "1") document.documentElement.classList.add("kui-on"); } catch (e) { document.documentElement.classList.add("kui-on"); }</script>
 <script type="text/html" id="kui-topright">
   <span class="state" data-bind="text: stateLabel(), css: stateClass()"></span>
   <div class="pop">

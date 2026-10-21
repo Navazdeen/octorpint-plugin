@@ -16,6 +16,7 @@ import time
 
 import flask
 import octoprint.plugin
+import tornado.gen
 import tornado.web
 from octoprint.access.permissions import Permissions
 
@@ -195,6 +196,10 @@ class _StreamProxy(tornado.web.RequestHandler):
         if self._access is not None:
             self._access(self.request)
         url = urlsplit(self._source())
+        started, sent, first = time.time(), 0, None
+        who = self.request.remote_ip
+        if self._logger:
+            self._logger.info("Webcam proxy: viewer %s connected (%s)", who, self.request.headers.get("User-Agent", "")[:60])
         target = (url.path or "/") + ("?" + url.query if url.query else "")
         try:
             self._upstream = await TCPClient().connect(url.hostname, url.port or 80, timeout=5)
@@ -217,15 +222,62 @@ class _StreamProxy(tornado.web.RequestHandler):
                 self.set_header("Content-Type", line.split(":", 1)[1].strip())
         self.set_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         self.set_header("Pragma", "no-cache")
+        end = "camera closed"
         try:
             while True:
                 chunk = await self._upstream.read_bytes(65536, partial=True)
                 self.write(chunk)
                 await self.flush()
+                sent += len(chunk)
+                if first is None:
+                    first = time.time() - started
+                    if self._logger:
+                        self._logger.info("Webcam proxy: first %d bytes to %s after %.2fs", sent, who, first)
         except StreamClosedError:
-            pass  # viewer left (on_connection_close closed the camera side) or the camera stopped
+            end = "viewer left" if self.request.connection.stream is None or self.request.connection.stream.closed() else "camera closed"
         finally:
             self._upstream.close()
+            if self._logger:
+                self._logger.info("Webcam proxy: %s ended after %.1fs, %d KB sent (%s)", who, time.time() - started, sent // 1024, end)
+
+
+class _SnapshotProxy(tornado.web.RequestHandler):
+    """One complete JPEG per request. Unlike the endless stream, it passes through security software and proxies
+    that hold a response back until it is complete."""
+
+    def initialize(self, access_validation=None, source=None, logger=None):
+        self._access = access_validation
+        self._source = source
+
+    async def get(self):
+        from urllib.parse import urlsplit
+        from tornado.tcpclient import TCPClient
+
+        if self._access is not None:
+            self._access(self.request)
+        url = urlsplit(self._source())
+        target = (url.path or "/") + ("?" + url.query if url.query else "")
+        stream = None
+        try:
+            stream = await TCPClient().connect(url.hostname, url.port or 80, timeout=5)
+            await stream.write(("GET %s HTTP/1.0\r\nHost: %s\r\n\r\n" % (target, url.netloc)).encode("latin-1"))
+            raw = await tornado.gen.with_timeout(time.time() + 5, stream.read_until_close())
+        except Exception as exc:
+            self.set_status(502)
+            self.finish("The camera snapshot at %s isn't answering (%s)." % (url.geturl(), exc))
+            return
+        finally:
+            if stream is not None:
+                stream.close()
+        head, _, body = raw.partition(b"\r\n\r\n")
+        if b" 200 " not in head.split(b"\r\n", 1)[0] + b" " or body[:2] != b"\xff\xd8":
+            self.set_status(502)
+            self.finish("The camera didn't return a picture.")
+            return
+        self.set_header("Content-Type", "image/jpeg")
+        self.set_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.set_header("Content-Length", str(len(body)))
+        self.finish(body)
 
 
 class KobraUiPlugin(octoprint.plugin.StartupPlugin,
@@ -564,17 +616,21 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
         from octoprint.server import app
         from octoprint.server.util.flask import permission_validator
         from octoprint.server.util.tornado import access_validation_factory
-        return [(r"/stream", _StreamProxy, {
-            "access_validation": access_validation_factory(app, permission_validator, Permissions.WEBCAM),
-            "source": self._stream_source,
-            "logger": self._logger,
-        })]
+        access = access_validation_factory(app, permission_validator, Permissions.WEBCAM)
+        return [(r"/stream", _StreamProxy, {"access_validation": access, "source": self._stream_source, "logger": self._logger}),
+                (r"/snapshot", _SnapshotProxy, {"access_validation": access, "source": self._snapshot_source, "logger": self._logger})]
 
     def _stream_source(self):
-        """The configured stream URL, pointed at 127.0.0.1 when the camera runs on this machine."""
+        return self._camera_url("stream", "http://127.0.0.1:8080/?action=stream")
+
+    def _snapshot_source(self):
+        return self._camera_url("snapshot", "http://127.0.0.1:8080/?action=snapshot")
+
+    def _camera_url(self, key, fallback):
+        """The configured camera URL, pointed at 127.0.0.1 when the camera runs on this machine."""
         from urllib.parse import urlsplit, urlunsplit
         from octoprint.settings import settings
-        url = settings().get(["plugins", "classicwebcam", "stream"]) or "http://127.0.0.1:8080/?action=stream"
+        url = settings().get(["plugins", "classicwebcam", key]) or fallback
         parts = urlsplit(url)
         local = {"localhost", "127.0.0.1", socket.gethostname().lower()}
         host = (parts.hostname or "").lower()
@@ -681,7 +737,7 @@ def _history(name):
 
 
 __plugin_name__ = "Kobra UI"
-__plugin_version__ = "2.8.4"
+__plugin_version__ = "2.8.7"
 __plugin_description__ = "Full-screen console for the Kobra 2 Neo on OctoPrint + Klipper"
 __plugin_pythoncompat__ = ">=3.9,<4"
 __plugin_implementation__ = KobraUiPlugin()

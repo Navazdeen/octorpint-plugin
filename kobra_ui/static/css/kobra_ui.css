@@ -708,3 +708,25 @@ html.kui-on .modal .table-bordered { border-color: var(--rule); }
   #kui .main > section, #kui .pane > .v, #kui .mapwrap, #kui #kui-mesh3d, #kui .kmodalwrap, #kui .kmodal, #kui .menu { animation: kui-fade .08s linear !important; }
   #kui .seg button::after, #kui .rail a::before { transition: none !important; }
 }
+
+/* ---------- OctoPrint's own screens in the Kobra look: loading, server offline, reload ---------- */
+html.kui-on #page-container-loading { position: fixed; inset: 0; z-index: 2000; background: var(--ground); display: grid; place-items: center; color: var(--text); font-family: var(--font); }
+html.kui-on #page-container-loading[style*="display: none"] { display: none !important; }
+html.kui-on #page-container-loading .wrapper, html.kui-on #page-container-loading .outer, html.kui-on #page-container-loading .inner { display: contents; }
+html.kui-on #page-container-loading .content { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; animation: kui-fade .3s cubic-bezier(.2, .8, .2, 1); }
+html.kui-on #page-container-loading .content::before { content: "K2"; width: 52px; height: 52px; border-radius: 12px; background: var(--accent); color: #1a0d04; display: grid; place-items: center; font: 600 18px var(--font); }
+html.kui-on #page-container-loading-header { font: 500 15px/22px var(--font) !important; color: var(--muted); margin: 0; letter-spacing: 0; }
+html.kui-on #page-container-loading-spinner { font-size: 0 !important; width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,.14); border-top-color: var(--accent); animation: kui-spin .8s linear infinite; display: inline-block; }
+html.kui-on #page-container-loading-spinner::before { content: none; }
+html.kui-on #page-container-loading-error { color: var(--negative); font-size: 13px; max-width: 460px; }
+html.kui-on #offline_overlay, html.kui-on #reloadui_overlay { z-index: 3000; font-family: var(--font); }
+html.kui-on #offline_overlay_background, html.kui-on #reloadui_overlay_background { background: rgba(10,10,12,.62) !important; opacity: 1 !important; backdrop-filter: blur(3px); animation: kui-fade .2s cubic-bezier(.2, .8, .2, 1); }
+html.kui-on #offline_overlay_wrapper, html.kui-on #reloadui_overlay_wrapper { display: flex; align-items: flex-start; justify-content: center; padding: 14vh 16px 16px; }
+html.kui-on #offline_overlay_wrapper .container, html.kui-on #reloadui_overlay_wrapper .container { width: auto; max-width: 480px; margin: 0; padding: 0; }
+html.kui-on #offline_overlay .hero-unit, html.kui-on #reloadui_overlay .hero-unit { background: var(--raised); color: var(--text); border-radius: 12px; padding: 22px 24px 20px; margin: 0; box-shadow: 0 30px 80px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.06); animation: kui-pop-in .22s cubic-bezier(.2, .8, .2, 1); }
+html.kui-on #offline_overlay .hero-unit h1, html.kui-on #reloadui_overlay .hero-unit h1 { font: 600 18px/26px var(--font); letter-spacing: -.01em; color: var(--text); margin: 0 0 8px; }
+html.kui-on #offline_overlay .hero-unit p, html.kui-on #reloadui_overlay .hero-unit p { font-size: 13px; line-height: 20px; color: var(--muted); margin: 0 0 16px; }
+html.kui-on #offline_overlay .hero-unit p strong, html.kui-on #offline_overlay .hero-unit p b { color: var(--text); font-weight: 500; }
+html.kui-on #offline_overlay .hero-unit p:last-child, html.kui-on #reloadui_overlay .hero-unit p:last-child { margin: 0; }
+html.kui-on #offline_overlay .btn, html.kui-on #reloadui_overlay .btn { height: 34px; padding: 0 16px; border-radius: 999px; border: 0; background: #fff; color: #111; font: 500 13px var(--font); text-shadow: none; box-shadow: none; display: inline-flex; align-items: center; gap: 8px; background-image: none; }
+html.kui-on #offline_overlay .btn:hover, html.kui-on #reloadui_overlay .btn:hover { background: #e6e6e8; }

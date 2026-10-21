@@ -1560,7 +1560,33 @@ $(function () {
         var cam = (function () {
             var url = "", ctrl = null, timer = null, tick = null, fails = 0, lastFrame = 0, frames = 0, fpsAt = 0, shown = null, gen = 0;
             var STALL = 5000, img = function () { return document.getElementById("kui-webcam"); };
-            function clear() { clearTimeout(timer); clearInterval(tick); timer = tick = null; if (ctrl) { try { ctrl.abort(); } catch (e) {} ctrl = null; } }
+            // "stream" reads the endless MJPEG response; "snapshot" fetches one complete JPEG after another. Some
+            // security software and proxies hold a response back until it is complete, so the stream never arrives:
+            // when its headers haven't come within HEADERS_WAIT, this browser switches to snapshots and remembers it.
+            var camMode = store("camMode") === "snapshot" ? "snapshot" : "stream", HEADERS_WAIT = 2500, hdrTimer = null, SNAP_MIN_MS = 100;
+            function clear() { clearTimeout(timer); clearTimeout(hdrTimer); clearInterval(tick); timer = tick = hdrTimer = null; if (ctrl) { try { ctrl.abort(); } catch (e) {} ctrl = null; } }
+            function snapUrl() { return url.replace(/\/stream(\?|$)/, "/snapshot$1"); }
+            function gotFrame() {
+                lastFrame = Date.now(); frames++; fails = 0;
+                if (self.camState() !== "live") { self.camState("live"); self.diag("cam", { ev: "live", mode: camMode }); }
+            }
+            function snapLoop(my) {
+                (function next() {
+                    if (my !== gen || !ctrl) return;
+                    var t0 = Date.now();
+                    fetch(snapUrl() + (snapUrl().indexOf("?") >= 0 ? "&" : "?") + "_kui=" + t0, { signal: ctrl.signal, cache: "no-store" }).then(function (res) {
+                        if (!res.ok) throw new Error("HTTP " + res.status);
+                        return res.blob();
+                    }).then(function (blob) {
+                        if (my !== gen) return;
+                        show(blob); gotFrame();
+                        setTimeout(next, Math.max(0, SNAP_MIN_MS - (Date.now() - t0)));
+                    }).catch(function (err) {
+                        self.diag("cam", { ev: "error", mode: "snapshot", err: String(err && (err.name + ": " + err.message) || err) });
+                        if (my === gen && ctrl && !ctrl.signal.aborted) retry("error");
+                    });
+                })();
+            }
             function stop() { clear(); gen++; self.camState("off"); self.camFps(0); }
             function show(blob) {
                 var el = img(); if (!el) return;
@@ -1604,7 +1630,16 @@ $(function () {
                     if (now - lastFrame > STALL) { retry("stall"); return; }
                     if (now - fpsAt >= 2000) { self.camFps(Math.round(frames * 1000 / (now - fpsAt))); frames = 0; fpsAt = now; }
                 }, 500);
+                if (camMode === "snapshot") { snapLoop(my); return; }
+                var gotHeaders = false;
+                hdrTimer = setTimeout(function () {
+                    if (my !== gen || gotHeaders) return;
+                    self.diag("cam", { ev: "fallback", to: "snapshot", waitedMs: HEADERS_WAIT });
+                    camMode = "snapshot"; store("camMode", "snapshot");
+                    connect();
+                }, HEADERS_WAIT);
                 fetch(url + (url.indexOf("?") >= 0 ? "&" : "?") + "_kui=" + Date.now(), { signal: ctrl.signal, cache: "no-store" }).then(function (res) {
+                    gotHeaders = true; clearTimeout(hdrTimer);
                     self.diag("cam", { ev: "response", status: res.status, type: res.type, ct: res.headers.get("content-type"), body: !!res.body });
                     if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
                     var reader = res.body.getReader(), buf = new Uint8Array(1 << 18), len = 0;
@@ -1622,8 +1657,7 @@ $(function () {
                                 var a = indexOf(buf, len, SOI, 0); if (a < 0) { if (len) { buf[0] = buf[len - 1]; len = 1; } break; }
                                 var b = indexOf(buf, len, EOI, a + 2); if (b < 0) { if (a > 0) { buf.copyWithin(0, a, len); len -= a; } break; }
                                 show(new Blob([buf.slice(a, b + 2)], { type: "image/jpeg" }));
-                                lastFrame = Date.now(); frames++; fails = 0;
-                                if (self.camState() !== "live") { self.camState("live"); self.diag("cam", { ev: "live", bytes: b + 2 }); }
+                                gotFrame();
                                 buf.copyWithin(0, b + 2, len); len -= b + 2;
                             }
                             return pump();
@@ -1641,7 +1675,7 @@ $(function () {
             });
             return {
                 want: function (u) { if (u !== url) self.diag("cam", { ev: "want", url: u, was: url, state: self.camState() }); if (u === url) { if (u && self.camState() === "off") connect(); return; } url = u; fails = 0; if (u) connect(); else stop(); },
-                now: function () { fails = 0; connect(); }
+                now: function () { fails = 0; camMode = "stream"; connect(); }   // Retry now tries the live stream again
             };
         })();
         self.camRetryNow = function () { cam.now(); };
