@@ -280,8 +280,8 @@
               <h2 id="kui-h-deck">Deck <span class="aside">
                 <span class="seg" role="group" aria-label="Order">
                   <button data-bind="attr: { 'aria-pressed': deckView() === 'groups' ? 'true' : 'false' }, click: function () { setDeckView('groups') }">Groups</button>
-                  <button data-bind="attr: { 'aria-pressed': deckView() === 'az' ? 'true' : 'false' }, click: function () { setDeckView('az') }">A–Z</button>
-                  <button data-bind="attr: { 'aria-pressed': deckView() === 'used' ? 'true' : 'false' }, click: function () { setDeckView('used') }">Most used</button>
+                  <button data-bind="attr: { 'aria-pressed': deckView() === 'az' ? 'true' : 'false' }, enable: !deckEdit(), click: function () { setDeckView('az') }">A–Z</button>
+                  <button data-bind="attr: { 'aria-pressed': deckView() === 'used' ? 'true' : 'false' }, enable: !deckEdit(), click: function () { setDeckView('used') }">Most used</button>
                 </span>
                 <button class="kb sm" id="kui-deck-edit" data-bind="visible: canEditDeck(), css: { accent: deckEdit() }, click: toggleDeckEdit"><i class="fa-solid" data-bind="css: deckEdit() ? 'fa-check' : 'fa-pen'"></i><span data-bind="text: deckEdit() ? 'Done' : 'Edit deck'"></span></button>
               </span></h2>

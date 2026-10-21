@@ -174,6 +174,7 @@ class _Reader:
 
 
 class KobraUiPlugin(octoprint.plugin.StartupPlugin,
+                    octoprint.plugin.ShutdownPlugin,
                     octoprint.plugin.TemplatePlugin,
                     octoprint.plugin.AssetPlugin,
                     octoprint.plugin.SimpleApiPlugin,
@@ -195,13 +196,25 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
         self._watcher = KlippyWatcher(self._logger, self._push_klipper)
         self._watcher.start()
         threading.Thread(target=self._console_flusher, daemon=True, name="kobra_ui-console").start()
+        threading.Thread(target=self._usage_flusher, daemon=True, name="kobra_ui-usage").start()
+
+    def _usage_flusher(self):
+        while True:  # run counts are written lazily; this makes sure a quiet period still saves them
+            time.sleep(30)
+            if self._deck:
+                self._deck.flush_usage(force=True)
+
+    def on_shutdown(self):
+        if self._deck:
+            self._deck.flush_usage(force=True)
 
     def _push_klipper(self, payload):
-        self._plugin_manager.send_plugin_message(self._identifier, {"klipper": payload})
+        # refresh the macro list first, so a browser reacting to this push already reads the new one
         for part in ("status", "delta"):
             settings = ((payload.get(part) or {}).get("configfile") or {}).get("settings")
             if settings:
                 self._refresh_macros(settings)
+        self._plugin_manager.send_plugin_message(self._identifier, {"klipper": payload})
 
     def _refresh_macros(self, settings):
         """Rebuild the deck's macro list; Klipper re-sends configfile after every restart."""
@@ -211,7 +224,7 @@ class KobraUiPlugin(octoprint.plugin.StartupPlugin,
             self._logger.exception("Couldn't read the macros from Klipper's config")
             return
         with self._macros_lock:
-            changed = [m["name"] for m in parsed] != [m["name"] for m in self._macros]
+            changed = parsed != self._macros  # any change: names, parameters, defaults, hints
             self._macros = parsed
         if changed:
             self._plugin_manager.send_plugin_message(self._identifier, {"macros_changed": True})
@@ -564,7 +577,7 @@ def _history(name):
 
 
 __plugin_name__ = "Kobra UI"
-__plugin_version__ = "2.7.7"
+__plugin_version__ = "2.7.9"
 __plugin_description__ = "Full-screen console for the Kobra 2 Neo on OctoPrint + Klipper"
 __plugin_pythoncompat__ = ">=3.9,<4"
 __plugin_implementation__ = KobraUiPlugin()

@@ -140,3 +140,17 @@ def test_number_params_need_numbers(bad):  # spec §1: values are checked agains
 def test_number_params_accept_numbers():
     assert build_script(MS, "PURGE_FILAMENT", {"LENGTH": "-2.5"}) == "PURGE_FILAMENT LENGTH=-2.5"
     assert build_script(MS, "PREHEAT", {"MATERIAL": "PETG"}) == "PREHEAT MATERIAL=PETG"
+
+
+def test_hints_follow_called_macros():  # review #2: PARK moves through _PARK, LOAD homes through _ENSURE_HOMED
+    m = by_name()
+    assert "moves" in m["PARK"]["hints"]
+    assert "moves" in m["Z_ENDSTOP_HIT"]["hints"]
+    assert {"homes", "moves"} <= set(m["LOAD_FILAMENT"]["hints"])
+
+
+def test_ends_and_pid_hints():
+    m = by_name()
+    assert "ends" in m["CANCEL_PRINT"]["hints"] and "ends" in m["PRINT_END"]["hints"]
+    assert "heats" in m["PID_HOTEND"]["hints"] and "heats" in m["PID_BED"]["hints"]
+    assert "ends" not in m["PAUSE"]["hints"] and "ends" not in m["COOLDOWN"]["hints"]

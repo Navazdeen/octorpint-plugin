@@ -208,13 +208,22 @@ window.KobraDeck = function (self, h) {
         return out.filter(Boolean).join(" ");
     });
 
+    // While a print runs or is paused, anything that restarts, ends the print, homes, moves or heats asks first.
+    // The print's own controls (PAUSE, RESUME, M600) are the exception.
+    var MIDPRINT_OK = { PAUSE: 1, RESUME: 1, M600: 1 };
     function needsConfirm(t) {
-        var busy = self.isPrinting() || self.isPaused();
-        if (busy && t.hints.indexOf("restarts") >= 0) return t.macro + " restarts Klipper. The running print would be lost.";
-        if (busy && t.hints.indexOf("homes") >= 0) return t.macro + " homes first if needed, which would ruin the running print.";
+        var busy = self.isPrinting() || self.isPaused(), has = function (x) { return t.hints.indexOf(x) >= 0; };
+        if (busy && !MIDPRINT_OK[t.macro]) {
+            if (has("restarts")) return t.macro + " restarts Klipper. The running print would be lost.";
+            if (has("ends")) return t.macro + " ends the running print.";
+            if (has("homes")) return t.macro + " homes first if needed, which would ruin the running print.";
+            if (has("moves")) return t.macro + " moves the print head while a print is running.";
+            if (has("heats")) return t.macro + " changes heater temperatures during the print.";
+        }
         if (t.confirm) return "Run " + t.label + " now?";
         return "";
     }
+    self.needsConfirm = needsConfirm;
     // run a deck entry; the plugin builds and checks the command line
     self.runMacro = function (name, params, tile) {
         var id = self.newRunId(), shown = [name].concat(Object.keys(params || {}).map(function (k) { return k + "=" + params[k]; })).join(" ");
@@ -236,15 +245,22 @@ window.KobraDeck = function (self, h) {
         if (why) { self.toast("Can't run " + t.label, "bad", why); return; }
         var go = function () { self.runMacro(t.macro, params || (t.preset ? t.preset.params : {}), t); };
         var ask = needsConfirm(t);
-        if (ask) self.confirm("Run " + t.label + "?", ask, "Run", ask.indexOf("lost") >= 0 || ask.indexOf("ruin") >= 0, go); else go();
+        if (ask) self.confirm("Run " + t.label + "?", ask, "Run", !/now\?$/.test(ask), go); else go();
     };
     self.runSelected = function () { var t = self.selTile(); if (t && self.selRunEnabled()) self.runTile(t, self.selValues()); };
     self.sheetOpen = ko.observable(false);
     function phone() { return window.matchMedia && window.matchMedia("(max-width: 760px)").matches; }
     self.tileClick = function (t) { if (!self.deckEdit()) { self.selectTile(t); if (phone()) self.sheetOpen(true); } return true; };
     self.closeSheet = function () { self.sheetOpen(false); };
-    self.tileDblClick = function (t) { if (!self.deckEdit()) { self.selectTile(t); self.runSelected(); } };
-    self.tileKey = function (t, e) { if (e.key === "Enter") { self.selectTile(t); self.runSelected(); return false; } return true; };
+    // run with the values in the panel when this tile is already selected (spec §2.1: "with the current values")
+    function selectKeep(t) { if (self.selMacro() !== t.key) self.selectTile(t); }
+    self.tileDblClick = function (t) { if (!self.deckEdit()) { selectKeep(t); self.runSelected(); } };
+    self.tileKey = function (t, e) {
+        // only the tile itself: keys on its menu buttons (edit mode) belong to those buttons
+        if (e.target !== e.currentTarget || self.deckEdit()) return true;
+        if (e.key === "Enter") { selectKeep(t); self.runSelected(); return false; }
+        return true;
+    };
     self.quickRun = function (t) { self.runTile(t, null); };
     self.quickBlocked = function (t) { return !!blockReason(t); };
     self.tileClass = function (t) {
@@ -377,7 +393,7 @@ window.KobraDeck = function (self, h) {
         if (mutate) { self.flip(deckEl, mutate, 160); drag.home = layoutRect(drag.el); place(e); }
     }
     function onDown(e) {
-        if (!self.deckEdit() || e.button !== 0 || !e.target.closest) return;
+        if (!self.deckEdit() || self.deckView() !== "groups" || e.button !== 0 || !e.target.closest) return;
         var tile = e.target.closest("#kui-deck .tile");
         if (!tile || e.target.closest(".tpop")) return;
         drag = { el: tile, key: tile.getAttribute("data-name"), x0: e.clientX, y0: e.clientY, started: false, pointer: e.pointerId };
@@ -424,7 +440,8 @@ window.KobraDeck = function (self, h) {
     document.addEventListener("pointermove", onMove, { passive: false });
     document.addEventListener("pointerup", onUp);
     document.addEventListener("pointercancel", onUp);
-    $(document).on("keydown.kuideck", function (e) { if (e.key === "Escape" && self.deckEdit() && !self.openMenu()) self.deckEdit(false); });
+    // Esc leaves edit mode, unless that Esc already closed something (a tile menu, a dialog, the palette)
+    $(document).on("keydown.kuideck", function (e) { if (e.key === "Escape" && !e.isDefaultPrevented() && self.deckEdit() && !self.openMenu()) self.deckEdit(false); });
 
     /* ------------------------------ palette ------------------------------ */
     // case-insensitive subsequence match: +10 per char, +15 at a word start, +5 when consecutive, -1 per skipped char
@@ -472,18 +489,25 @@ window.KobraDeck = function (self, h) {
             return cmd ? [{ group: "run", kind: "raw", icon: "fa-terminal", html: h.esc(cmd), sub: "Send raw G-code", key: "raw", cmd: cmd }] : [];
         }
         var usage = d ? d.usage : {}, run = [], go = [];
+        // nothing runnable until something is typed: Ctrl+K / "/" then Enter must never start a macro
+        if (!q.trim()) {
+            VIEWS.forEach(function (v) { go.push({ group: "goto", kind: "view", key: "view:" + v[0], icon: v[2], title: v[1], sub: "", right: "view", route: v[0], hits: [] }); });
+            go.forEach(function (r) { r.html = marked(r.title, []); });
+            return go;
+        }
         function add(list, row, text) {
             var m = self.fuzzyScore(q, text); if (!m) return;
             row.score = m.score + Math.min(8, usage[row.key] || 0); row.hits = m.hits; list.push(row);
         }
         if (d) {
             self.macros().forEach(function (m) {
-                if (m.internal) return;
+                if (m.internal || m.slicer || d.hidden.indexOf(m.name) >= 0) return;
                 var t = self.tileModel(m.name, "");
                 add(run, { group: "run", kind: "macro", key: m.name, icon: t.icon, title: m.name, mono: true, tile: t,
                            sub: firstLine(m.description), right: (t.pinned ? "pinned" : "") }, m.name);
             });
             Object.keys(d.presets).forEach(function (id) {
+                if (d.hidden.indexOf("preset:" + id) >= 0) return;
                 var t = self.tileModel("preset:" + id, "");
                 add(run, { group: "run", kind: "preset", key: t.key, icon: "fa-bookmark", title: t.label, tile: t,
                            sub: "preset · " + t.chips.map(function (c) { return c.k + " " + c.v; }).join(", "), right: t.pinned ? "pinned" : "" }, t.label);
@@ -675,7 +699,10 @@ window.KobraDeck = function (self, h) {
             this.animate([{ transform: "translate(" + dx + "px," + dy + "px)" }, { transform: "none" }], { duration: ms || 260, easing: "cubic-bezier(.2,.8,.2,1)" });
         });
     };
-    self.setDeckView = function (v) { self.flip(document.getElementById("kui-deck"), function () { self.deckView(v); }); };
+    self.setDeckView = function (v) {
+        if (self.deckEdit() && v !== "groups") return;   // drag order is saved per group: edit only in Groups
+        self.flip(document.getElementById("kui-deck"), function () { self.deckView(v); });
+    };
 
     /* ------------------------------ wiring ------------------------------ */
     var baseMessage = self.onDataUpdaterPluginMessage;

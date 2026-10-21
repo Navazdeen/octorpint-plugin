@@ -73,6 +73,7 @@ Klipper is deployed while a print is running.
 | D6 | Ctrl+K / "/" palette: macros, presets, config sections, settings, files, views; Tab for parameters; > for raw G-code | deployed + verified |
 | D7 | Motion per the spec table; reduced motion = short fades; phone bottom sheet | deployed + verified |
 | D8 | Whole-UI speed-up: other plugins' root :has() rules (PrettyGCode) restyled ~37k elements on every DOM change; rewritten to attribute flags (style recalc per deck switch 18 → 4 ms) | deployed + verified (PrettyGCode 3D renders) |
+| D10 | Final review fixes: Ctrl+K/"/" then Enter no longer runs anything; mid-print confirms for anything that moves, ends the print, heats, homes or restarts (hints now follow called macros); Enter on edit-mode menus no longer runs the macro; Enter keeps typed values; edit only in Groups; OctoPrint fallback fixed; :has rewrite narrowed; run counts flushed every 30 s and on shutdown; macro list refreshed before pushes | deployed + verified (deck.js R1-R6) |
 | D9 | INCIDENT during testing: a palette test sent PURGE_FILAMENT LENGTH=5x to the printer (homed, heated to 210 C, purged at the tower). Heater turned off right after. Tests now run behind a network safety net that blocks every command except RESPOND and server-rejected calls | fixed |
 
 Verification: `tools/shot/verify.js` + `probe8.js` (U1, U3–U12 pass; print-only states simulated in the browser only).

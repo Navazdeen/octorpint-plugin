@@ -72,3 +72,10 @@ def test_no_default_written_before_klipper_answers(tmp_path, log):
     d = DeckStore(str(tmp_path), log).load([])  # no macros known yet
     assert not (tmp_path / "deck.json").exists() and d["version"] == 0
     assert DeckStore(str(tmp_path), log).load(MS)["groups"][0]["items"][0] == "LOAD_FILAMENT"
+
+
+def test_usage_flush_never_writes_an_empty_deck(tmp_path, log):  # review #8b
+    s = DeckStore(str(tmp_path), log)
+    s.bump_usage("PARK")
+    s.flush_usage(force=True)
+    assert not (tmp_path / "deck.json").exists()

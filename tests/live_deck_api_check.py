@@ -30,7 +30,7 @@ ok("GET /macros", code == 200 and len(r.get("macros", [])) == 34 and "version" i
 code, r2 = call("POST", "/api/plugin/kobra_ui", {"command": "run_macro", "macro": "RESPOND", "params": {}, "id": "t1"})
 ok("run_macro unknown macro -> 400", code == 400 and "RESPOND" in str(r2), (code, r2))
 console_before = t.api("GET", "/api/plugin/kobra_ui")["console"][-1:]
-code, r3 = call("POST", "/api/plugin/kobra_ui", {"command": "run_macro", "macro": "PARK", "params": {"X": "1;M112"}, "id": "t2"})
+code, r3 = call("POST", "/api/plugin/kobra_ui", {"command": "run_macro", "macro": "COOLDOWN", "params": {"X": "1;2"}, "id": "t2"})
 console_after = t.api("GET", "/api/plugin/kobra_ui")["console"][-1:]
 ok("run_macro bad value -> 400 naming X, nothing sent", code == 400 and "X:" in str(r3) and console_before == console_after, (code, r3))
 code, r4 = call("GET", "/plugin/kobra_ui/config/outline")

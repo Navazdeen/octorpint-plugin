@@ -101,6 +101,8 @@ class DeckStore:
         with self.lock:
             if not self.pending_usage or (not force and time.time() - self.last_flush < USAGE_FLUSH_SECONDS):
                 return
+            if not os.path.exists(self.path):  # keep counting until a real deck exists; never store an empty one
+                return
             deck = self._load([])
             for key, n in self.pending_usage.items():
                 deck["usage"][key] = deck["usage"].get(key, 0) + n

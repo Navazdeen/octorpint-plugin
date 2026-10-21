@@ -18,10 +18,15 @@ _SET_DICT = re.compile(r"""\{%-?\s*set\s+(\w+)\s*=\s*\{(.*?)\}\s*-?%\}""", re.S)
 _DICT_KEY = re.compile(r"""['"]([^'"]+)['"]\s*:""")
 _FIRST_IF = re.compile(r"""\{%-?\s*if\s+(.*?)\s*-?%\}(.*?)\{%-?\s*(?:elif|else|endif)\b""", re.S)
 _HINTS = {
-    "heats": re.compile(r"\b(M104|M109|M140|M190|SET_HEATER_TEMPERATURE)\b|\b_HEAT"),
+    "heats": re.compile(r"\b(M104|M109|M140|M190|SET_HEATER_TEMPERATURE|PID_CALIBRATE)\b|\b_HEAT"),
     "homes": re.compile(r"\bG28\b|\b_ENSURE_HOMED\b"),
+    "moves": re.compile(r"^\s*(G0|G1|G2|G3|G28)\b", re.M),
+    "ends": re.compile(r"\b(M84|M18|CANCEL_PRINT_BASE|SDCARD_RESET_FILE)\b"),
     "restarts": re.compile(r"\b(SAVE_CONFIG|RESTART|FIRMWARE_RESTART)\b"),
 }
+# hints that carry over to every macro that calls the one that has them
+_INHERITED = ("heats", "homes", "moves", "ends", "restarts")
+_CALL = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)", re.M)
 
 
 def _resolve_default(expr, settings):
@@ -115,13 +120,25 @@ def _commands(gcode):
 
 
 def parse_macros(settings):
-    macros = []
-    for section, opts in settings.items():
-        if not section.startswith("gcode_macro "):
-            continue
-        name = section[len("gcode_macro "):].strip().upper()
+    macros, own, calls = [], {}, {}
+    sections = [(s[len("gcode_macro "):].strip().upper(), o) for s, o in settings.items() if s.startswith("gcode_macro ")]
+    names = {n for n, _ in sections}
+    for name, opts in sections:
+        body = _commands(opts.get("gcode", "") or "")
+        own[name] = {h for h, rx in _HINTS.items() if rx.search(body)}
+        calls[name] = {c.upper() for c in _CALL.findall(body) if c.upper() in names and c.upper() != name}
+    changed = True
+    while changed:   # pass hints up the call chain (PARK -> _PARK moves, LOAD_FILAMENT -> _ENSURE_HOMED homes)
+        changed = False
+        for name in own:
+            for callee in calls[name]:
+                extra = (own[callee] & set(_INHERITED)) - own[name]
+                if extra:
+                    own[name] |= extra
+                    changed = True
+    for name, opts in sections:
         gcode = opts.get("gcode", "") or ""
-        hints = [h for h, rx in _HINTS.items() if rx.search(_commands(gcode))]
+        hints = [h for h in _HINTS if h in own[name]]
         state = STATE_OVERRIDES.get(name) or _state_hint(gcode)
         if state:
             hints.append(state)

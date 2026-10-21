@@ -63,6 +63,10 @@ $(function () {
             for (; i < part.length && depth; i++) { if (part.charAt(i) === "(") depth++; else if (part.charAt(i) === ")") depth--; }
             var inner = part.slice(m[0].length, i - 1), rest = part.slice(i);
             if (rest.indexOf(":has(") >= 0) return part;
+            // only selectors whose match can change by class or by nodes coming and going (what the observer watches),
+            // and .pg-dark only when it is the root element's class
+            if (!/^[\w\s.#>+~*,-]+$/.test(inner.replace(/:not\(\.[\w-]+\)/g, ""))) return part;
+            if (m[1].indexOf(".pg-dark") >= 0 && !root.classList.contains("pg-dark")) return part;
             try { document.querySelector(inner); } catch (e) { return part; }
             var n = flags.indexOf(inner); if (n < 0) { flags.push(inner); n = flags.length - 1; }
             return m[1] + "[data-kui-has-" + n + "]" + rest;
@@ -80,7 +84,7 @@ $(function () {
         var queued = false;
         function update() {
             queued = false;
-            flags.forEach(function (sel, n) { var on = !!document.querySelector(sel); if (root.hasAttribute("data-kui-has-" + n) !== on) root.toggleAttribute("data-kui-has-" + n, on); });
+            flags.forEach(function (sel, n) { var hit = document.querySelector(sel), on = !!hit && hit !== root; if (root.hasAttribute("data-kui-has-" + n) !== on) root.toggleAttribute("data-kui-has-" + n, on); });
         }
         update();
         new MutationObserver(function () { if (!queued) { queued = true; requestAnimationFrame(update); } })
@@ -295,7 +299,7 @@ $(function () {
             var id = self.newRunId(), run = self.runFeedback(id, cmd);
             OctoPrint.simpleApiCommand(PLUGIN, "run", { script: cmd, id: id }).fail(function () {
                 // no socket path (Klipper's API socket missing): send through OctoPrint, without a completion signal
-                delete runs[id]; setBusy(btn, false);
+                delete runs[id]; setBusy(run.btn, false);
                 OctoPrint.control.sendGcode(cmd);
                 if (run.toast) self.toastSet(run.toast, "Sent " + cmd.split(/\s/)[0], "info", "Watch the console for the result.");
             });
